@@ -1,14 +1,16 @@
 import type { BlackcashDatabase } from "../db";
+import type {
+  Contact,
+  ContactInteraction,
+  ContactLink,
+  ContactInput,
+  ContactFilters,
+  ContactCsvRow,
+} from "../types/contacts";
 import {
   isContactType,
-  type Contact,
-  type ContactCsvRow,
-  type ContactFilters,
-  type ContactInput,
-  type ContactInteraction,
-  type ContactLink,
-  type ContactLinkKind,
   type InteractionKind,
+  type ContactLinkKind,
 } from "../types/contacts";
 
 function now(): string {
@@ -39,14 +41,14 @@ export async function listContacts(
       }
       return true;
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name)) as Contact[];
 }
 
 export async function getContact(
   database: BlackcashDatabase,
   id: number,
 ): Promise<Contact | undefined> {
-  return database.contacts.get(id);
+  return database.contacts.get(id) as Promise<Contact | undefined>;
 }
 
 export async function createContact(
@@ -67,7 +69,7 @@ export async function createContact(
     followUpDate: input.followUpDate || undefined,
     createdAt: input.createdAt ?? now(),
   };
-  const id = await database.contacts.add(record);
+  const id = await database.contacts.add(record as any);
   return { ...record, id };
 }
 
@@ -98,7 +100,7 @@ export async function listInteractions(
   const rows = await database.interactions.where("contactId").equals(contactId).toArray();
   return rows.sort(
     (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
-  );
+  ) as ContactInteraction[];
 }
 
 export async function createInteraction(
@@ -118,7 +120,7 @@ export async function createInteraction(
     date: input.date,
     createdAt: input.createdAt ?? now(),
   };
-  const id = await database.interactions.add(record);
+  const id = await database.interactions.add(record as any);
   return { ...record, id };
 }
 
@@ -127,7 +129,7 @@ export async function listContactLinks(
   contactId: number,
 ): Promise<ContactLink[]> {
   const rows = await database.contactLinks.where("contactId").equals(contactId).toArray();
-  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt)) as ContactLink[];
 }
 
 export async function createContactLink(
@@ -147,7 +149,7 @@ export async function createContactLink(
     label: input.label.trim(),
     createdAt: input.createdAt ?? now(),
   };
-  const id = await database.contactLinks.add(record);
+  const id = await database.contactLinks.add(record as any);
   return { ...record, id };
 }
 
