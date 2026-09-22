@@ -5,9 +5,12 @@ import { Guilloche } from "../ornament/Guilloche";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { toRomanNumeral } from "../ornament/RomanNumeral";
 
+export type StatUnit = "currency" | "count" | "percent" | "ratio";
+
 export interface StatCardProps {
   label: string;
   value: number;
+  unit: StatUnit;
   formatOptions?: Intl.NumberFormatOptions;
   delta?: number;
   icon?: LucideIcon;
@@ -15,9 +18,27 @@ export interface StatCardProps {
   index?: number; // for roman numeral denomination
 }
 
+function resolveFormatOptions(unit: StatUnit, customOptions?: Intl.NumberFormatOptions): Intl.NumberFormatOptions {
+  if (customOptions) return customOptions;
+
+  switch (unit) {
+    case "currency":
+      return { style: "currency", currency: "USD", currencySign: "accounting", maximumFractionDigits: 0 };
+    case "count":
+      return { style: "decimal", maximumFractionDigits: 0, useGrouping: true };
+    case "percent":
+      return { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    case "ratio":
+      return { style: "decimal", minimumFractionDigits: 2, maximumFractionDigits: 2 };
+    default:
+      return { style: "decimal", maximumFractionDigits: 0 };
+  }
+}
+
 export function StatCard({
   label,
   value,
+  unit,
   formatOptions,
   delta,
   icon: Icon,
@@ -28,6 +49,7 @@ export function StatCard({
   const deltaIsPositive = hasDelta && delta >= 0;
   const serialNum = Math.abs(Math.floor(value)).toString().padStart(8, "0");
   const serialSuffix = String.fromCharCode(65 + (index % 26)); // A, B, C...
+  const resolvedFormatOptions = resolveFormatOptions(unit, formatOptions);
 
   return (
     <Card
@@ -65,7 +87,7 @@ export function StatCard({
           >
             <AnimatedNumber
               value={value}
-              formatOptions={formatOptions}
+              formatOptions={resolvedFormatOptions}
               className="text-[28px] font-mono tabular-nums text-text"
             />
           </div>

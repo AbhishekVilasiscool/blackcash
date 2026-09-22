@@ -7,5 +7,7 @@ export { Laurel } from "./Laurel";
 export { Corner } from "./Corner";
 export { Card } from "./Card";
 export { Section } from "./Section";
+export { StatCard } from "../ui/StatCard";
+export type { StatCardProps, StatUnit } from "../ui/StatCard";
 export type { CardProps } from "./Card";
 export type { SectionProps } from "./Section";

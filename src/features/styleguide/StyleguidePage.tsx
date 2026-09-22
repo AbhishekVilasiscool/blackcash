@@ -334,14 +334,14 @@ export function StyleguidePage() {
               <StatCard
                 label="Monthly Revenue"
                 value={48250}
-                formatOptions={{ style: "currency", currency: "USD", maximumFractionDigits: 0 }}
+                unit="currency"
                 delta={3.2}
                 index={1}
               />
               <StatCard
                 label="Portfolio IRR"
                 value={0.124}
-                formatOptions={{ style: "percent", maximumFractionDigits: 1 }}
+                unit="percent"
                 delta={0.8}
                 index={2}
               />

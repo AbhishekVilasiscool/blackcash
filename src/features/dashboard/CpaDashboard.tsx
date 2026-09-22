@@ -2,13 +2,11 @@ import { Calculator, CalendarCheck2, Clock, Users } from "lucide-react";
 import type { StatCardProps } from "../../components/ui/StatCard";
 import { DashboardScaffold } from "./DashboardScaffold";
 
-const usd = { style: "currency", currency: "USD", maximumFractionDigits: 0 } as const;
-
 const stats: readonly StatCardProps[] = [
-  { label: "Clients", value: 142, delta: 2.5, icon: Users },
-  { label: "Filings This Month", value: 18, icon: CalendarCheck2 },
-  { label: "Upcoming Deadlines", value: 6, delta: -1, icon: Clock },
-  { label: "Provisioned Tax", value: 52000, formatOptions: usd, icon: Calculator },
+  { label: "Clients", value: 142, unit: "count", delta: 2.5, icon: Users },
+  { label: "Filings This Month", value: 18, unit: "count", icon: CalendarCheck2 },
+  { label: "Upcoming Deadlines", value: 6, unit: "count", delta: -1, icon: Clock },
+  { label: "Provisioned Tax", value: 52000, unit: "currency", icon: Calculator },
 ];
 
 export function CpaDashboard() {

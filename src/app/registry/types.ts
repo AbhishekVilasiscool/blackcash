@@ -3,6 +3,8 @@ import type { LucideIcon } from "lucide-react";
 
 export type ModeId = "accountant" | "cpa" | "banker" | "investor";
 
+export type StatUnit = "currency" | "count" | "percent" | "ratio";
+
 export interface ModuleDef {
   id: string;
   title: string;
