@@ -12,7 +12,7 @@ function ModeSegmented() {
   return (
     <div className="flex flex-col gap-3">
       {/* Horizontal row of wax seals */}
-      <div className="flex items-center gap-2" role="tablist" aria-label="Mode selection">
+      <div className="flex items-center gap-1.5" role="tablist" aria-label="Mode selection">
         {MODES.map((mode) => {
           const active = mode.id === modeId;
 
@@ -23,7 +23,7 @@ function ModeSegmented() {
               role="tab"
               aria-selected={active}
               onClick={() => setMode(mode.id)}
-              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent min-w-0 ${
                 active ? "opacity-100" : "opacity-50 hover:opacity-75"
               }`}
               style={{
@@ -31,18 +31,18 @@ function ModeSegmented() {
               } as React.CSSProperties}
             >
               <WaxSeal
-                size={28}
+                size={26}
                 accent={mode.accent}
                 tone={active ? "accent" : "oxblood"}
                 className="shrink-0 transition-all duration-300"
                 style={{
-                  transform: active ? "scale(1.1)" : "scale(1)",
-                  filter: active ? "drop-shadow(0 0 8px var(--mode-accent))" : "none",
+                  transform: active ? "scale(1.08)" : "scale(1)",
+                  filter: active ? "drop-shadow(0 0 6px var(--mode-accent))" : "none",
                 } as React.CSSProperties}
                 aria-hidden="true"
               />
               <span
-                className={`font-caps text-[10px] leading-tight transition-colors ${
+                className={`font-caps text-[9px] leading-tight transition-colors whitespace-nowrap truncate max-w-[64px] ${
                   active ? "text-text" : "text-muted"
                 }`}
               >
