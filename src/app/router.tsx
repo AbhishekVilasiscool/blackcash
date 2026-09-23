@@ -19,6 +19,8 @@ function ModuleView({ def }: { def: ModuleDef }) {
 // Dev-only styleguide route
 const isDev = import.meta.env.DEV;
 const StyleguidePage = isDev ? lazy(() => import("../features/styleguide/StyleguidePage")) : null;
+// Dev Hub route (always available, standalone)
+const DevHubPage = lazy(() => import("../features/devhub/DevHubPage"));
 
 export function AppRoutes() {
   return (
@@ -28,6 +30,7 @@ export function AppRoutes() {
         <Route key={def.id} path={def.path} element={<ModuleView def={def} />} />
       ))}
       <Route path="/contacts/:contactId" element={<ContactDetailPage />} />
+      <Route path="/dev" element={<Suspense fallback={<Loading />}><DevHubPage /></Suspense>} />
       {isDev && StyleguidePage && (
         <Route path="/styleguide" element={<Suspense fallback={<Loading />}><StyleguidePage /></Suspense>} />
       )}

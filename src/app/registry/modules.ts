@@ -33,6 +33,13 @@ import type { ModeId, ModuleDef } from "./types";
 const soonComponent = lazy(() => import("../../features/soon/ModuleSoonPlaceholder"));
 const isDev = import.meta.env.DEV;
 
+const journalComponent = lazy(() => import("../../features/accounting/Journal"));
+const chartOfAccountsComponent = lazy(() => import("../../features/accounting/ChartOfAccounts"));
+const settingsComponent = lazy(() => import("../../features/settings/SettingsPage"));
+const trialBalanceComponent = lazy(() => import("../../features/accounting/reports/TrialBalance"));
+const incomeStatementComponent = lazy(() => import("../../features/accounting/reports/IncomeStatement"));
+const balanceSheetComponent = lazy(() => import("../../features/accounting/reports/BalanceSheet"));
+
 const ACCENT_COLORS: Record<ModeId, string> = {
   accountant: "#5FB8A5",
   cpa: "#9B87C9",
@@ -67,8 +74,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: BookOpen,
     path: "chart-of-accounts",
     modes: ["accountant"],
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: chartOfAccountsComponent,
   }),
   withAccent({
     id: "journal",
@@ -76,8 +83,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: Notebook,
     path: "journal",
     modes: ["accountant"],
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: journalComponent,
   }),
   withAccent({
     id: "invoices",
@@ -112,8 +119,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: ListChecks,
     path: "trial-balance",
     modes: ["accountant"],
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: trialBalanceComponent,
   }),
   withAccent({
     id: "pnl",
@@ -121,8 +128,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: TrendingUp,
     path: "pnl",
     modes: ["accountant"],
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: incomeStatementComponent,
   }),
   withAccent({
     id: "balance-sheet",
@@ -130,8 +137,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: Landmark,
     path: "balance-sheet",
     modes: ["accountant"],
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: balanceSheetComponent,
   }),
   withAccent({
     id: "loans",
@@ -323,8 +330,8 @@ export const MODULES: readonly ModuleDef[] = [
     icon: Settings,
     path: "settings",
     modes: "all",
-    status: "soon",
-    component: soonComponent,
+    status: "ready",
+    component: settingsComponent,
   }),
   ...(isDev
     ? [
