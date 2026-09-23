@@ -11,8 +11,13 @@ function ModeSegmented() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Horizontal row of wax seals */}
-      <div className="flex items-center gap-1.5" role="tablist" aria-label="Mode selection">
+      {/* Grid of 4 wax seals - mathematically overflow-proof */}
+      <div
+        className="grid grid-cols-4 gap-1.5"
+        role="tablist"
+        aria-label="Mode selection"
+        style={{ minWidth: 0 } as React.CSSProperties}
+      >
         {MODES.map((mode) => {
           const active = mode.id === modeId;
 
@@ -42,7 +47,7 @@ function ModeSegmented() {
                 aria-hidden="true"
               />
               <span
-                className={`font-caps text-[9px] leading-tight transition-colors whitespace-nowrap truncate max-w-[64px] ${
+                className={`font-caps text-[9px] leading-tight transition-colors truncate max-w-full ${
                   active ? "text-text" : "text-muted"
                 }`}
               >
@@ -55,15 +60,15 @@ function ModeSegmented() {
 
       {/* Active mode info below */}
       <motion.div
-        className="px-2 py-2 text-center"
+        className="px-2 py-2 text-center min-w-0"
         initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
-        <span className="block font-caps-lg leading-tight text-text">
+        <span className="block font-caps-lg leading-tight text-text truncate">
           {MODES.find((m) => m.id === modeId)?.label}
         </span>
-        <span className="block font-display-italic text-sm leading-tight text-muted mt-0.5">
+        <span className="block font-display-italic text-sm leading-tight text-muted mt-0.5 truncate">
           {MODES.find((m) => m.id === modeId)?.tagline}
         </span>
       </motion.div>
