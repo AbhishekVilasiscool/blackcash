@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { useReducedMotion, useSpring } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 
 export interface AnimatedNumberProps {
   value: number;
@@ -42,7 +42,7 @@ function resolveFormatOptions(formatOptions?: Intl.NumberFormatOptions): Intl.Nu
 function getNumberParts(formatter: Intl.NumberFormat, value: number) {
   const parts = formatter.formatToParts(value);
   const currencySymbol = parts.find((p) => p.type === "currency")?.value ?? "";
-  const numberParts = parts.filter((p) => 
+  const numberParts = parts.filter((p) =>
     p.type === "integer" || p.type === "group" || p.type === "decimal" || p.type === "fraction"
   );
   const numberString = numberParts.map((p) => p.value).join("");
@@ -59,6 +59,8 @@ function getNumberParts(formatter: Intl.NumberFormat, value: number) {
  * so negatives render as ($1,250.00) in --danger.
  * Percent values are fractions (0.1235 => 12.35%).
  * Locale and currency are workspace settings (default en-US/USD; support en-IN/INR lakh grouping).
+ *
+ * On value change, adds a 300ms color pulse toward --accent then back.
  */
 export function AnimatedNumber({
   value,
@@ -69,10 +71,12 @@ export function AnimatedNumber({
   const reduceMotion = useReducedMotion();
   const [display, setDisplay] = useState(value);
   const [showCoinFlip, setShowCoinFlip] = useState(false);
+  const [pulse, setPulse] = useState(false);
   const spring = useSpring(0, { stiffness: 80, damping: 22, mass: 1 });
   const prevValueRef = useRef(value);
   const resolvedOptions = resolveFormatOptions(formatOptions);
   const formatterRef = useRef(new Intl.NumberFormat(locale, resolvedOptions));
+  const pulseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -83,6 +87,14 @@ export function AnimatedNumber({
     if (value !== prevValueRef.current) {
       setShowCoinFlip(true);
       setTimeout(() => setShowCoinFlip(false), 400);
+
+      // Trigger color pulse
+      setPulse(true);
+      if (pulseRef.current) clearTimeout(pulseRef.current);
+      pulseRef.current = setTimeout(() => {
+        setPulse(false);
+      }, 300);
+
       prevValueRef.current = value;
     }
 
@@ -112,7 +124,14 @@ export function AnimatedNumber({
         </span>
       )}
       {!showCoinFlip && <span className="currency-symbol" aria-hidden="true">{currencySymbol}</span>}
-      <span style={{ fontFamily: "var(--font-mono)" } as React.CSSProperties}>
+      <span
+        className="font-mono"
+        style={{
+          fontFamily: "var(--font-mono)",
+          color: pulse ? "var(--accent)" : "var(--text)",
+          transition: "color 0.3s ease",
+        } as React.CSSProperties}
+      >
         {numberString}
       </span>
     </span>
