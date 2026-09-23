@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { db } from "../lib/db";
 import {
   initializeVault,
@@ -125,64 +125,64 @@ function createVaultStore() {
 
   const getKey = () => key;
 
-  const encrypt = useCallback(
-    async <T,>(data: T): Promise<string> => {
-      if (!key) throw new Error("Vault is locked");
-      return encryptField(JSON.stringify(data), key);
-    },
-    [key]
-  );
+  // NOTE: plain functions, NOT hooks. createVaultStore() runs once at module
+  // scope (outside any component render), where no React dispatcher exists —
+  // wrapping these in useCallback crashed production on load with
+  // "Cannot read properties of null (reading 'useCallback')". Identity is
+  // already stable (created once), and `key` is read live from the closure
+  // at call time, so memoization deps would be meaningless here anyway.
+  const encrypt = async <T,>(data: T): Promise<string> => {
+    if (!key) throw new Error("Vault is locked");
+    return encryptField(JSON.stringify(data), key);
+  };
 
-  const decrypt = useCallback(
-    async <T,>(encryptedB64: string): Promise<T> => {
-      if (!key) throw new Error("Vault is locked");
-      const json = await decryptField(encryptedB64, key);
-      return JSON.parse(json);
-    },
-    [key]
-  );
+  const decrypt = async <T,>(encryptedB64: string): Promise<T> => {
+    if (!key) throw new Error("Vault is locked");
+    const json = await decryptField(encryptedB64, key);
+    return JSON.parse(json);
+  };
 
-  const encryptTableRow = useCallback(
-    async (tableName: string, row: Record<string, unknown>): Promise<Record<string, unknown>> => {
-      if (!key || !isSensitiveTable(tableName)) return row;
+  const encryptTableRow = async (
+    tableName: string,
+    row: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    if (!key || !isSensitiveTable(tableName)) return row;
 
-      const sensitiveFields = getSensitiveFields(tableName);
-      const encryptedRow = { ...row };
+    const sensitiveFields = getSensitiveFields(tableName);
+    const encryptedRow = { ...row };
 
-      for (const field of sensitiveFields) {
-        const value = row[field];
-        if (value !== undefined && value !== null) {
-          (encryptedRow as Record<string, unknown>)[field] = await encryptField(String(value), key);
+    for (const field of sensitiveFields) {
+      const value = row[field];
+      if (value !== undefined && value !== null) {
+        (encryptedRow as Record<string, unknown>)[field] = await encryptField(String(value), key);
+      }
+    }
+
+    return encryptedRow;
+  };
+
+  const decryptTableRow = async (
+    tableName: string,
+    row: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    if (!key || !isSensitiveTable(tableName)) return row;
+
+    const sensitiveFields = getSensitiveFields(tableName);
+    const decryptedRow = { ...row };
+
+    for (const field of sensitiveFields) {
+      const value = row[field];
+      if (value !== undefined && value !== null && typeof value === "string") {
+        try {
+          (decryptedRow as Record<string, unknown>)[field] = await decryptField(value, key);
+        } catch {
+          (decryptedRow as Record<string, unknown>)[field] = value;
         }
       }
+    }
 
-      return encryptedRow;
-    },
-    [key]
-  );
-
-  const decryptTableRow = useCallback(
-    async (tableName: string, row: Record<string, unknown>): Promise<Record<string, unknown>> => {
-      if (!key || !isSensitiveTable(tableName)) return row;
-
-      const sensitiveFields = getSensitiveFields(tableName);
-      const decryptedRow = { ...row };
-
-      for (const field of sensitiveFields) {
-        const value = row[field];
-        if (value !== undefined && value !== null && typeof value === "string") {
-          try {
-            (decryptedRow as Record<string, unknown>)[field] = await decryptField(value, key);
-          } catch {
-            (decryptedRow as Record<string, unknown>)[field] = value;
-          }
-        }
-      }
-
-      return decryptedRow;
-    },
-    [key]
-  );
+    return decryptedRow;
+  };
 
   return {
     subscribe,
