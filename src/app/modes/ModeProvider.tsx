@@ -21,8 +21,13 @@ const ModeContext = createContext<ModeContextValue | null>(null);
 
 const ACTIVE_MODE_KEY = "activeMode";
 
-export function ModeProvider({ children }: { children: ReactNode }) {
-  const [modeId, setModeId] = useState<ModeId>("accountant");
+interface ModeProviderProps {
+  children: ReactNode;
+  initialMode?: ModeId;
+}
+
+export function ModeProvider({ children, initialMode = "accountant" }: ModeProviderProps) {
+  const [modeId, setModeId] = useState<ModeId>(initialMode);
 
   useEffect(() => {
     let cancelled = false;

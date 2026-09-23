@@ -11,6 +11,9 @@ import { Atmosphere } from "../components/atmosphere";
 import { WaxSeal } from "../components/ornament";
 import { toRomanNumeral } from "../components/ornament/RomanNumeral";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { VaultIndicator } from "../components/ui/VaultIndicator";
+import { UnlockScreen } from "../components/ui/UnlockScreen";
+import { useVault } from "../hooks/useVault";
 
 function DashboardNavItem({ compact = false }: { compact?: boolean }) {
   return (
@@ -74,6 +77,7 @@ export function Layout() {
   const { open } = useCommandPalette();
   const { modeId, mode } = useMode();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { isLocked, isUninitialized, unlock } = useVault();
 
   const groups = getGroupedModules(modeId);
   const keyModules = getKeyModules(modeId, 4);
@@ -81,6 +85,24 @@ export function Layout() {
   const pageMotion = reduceMotion
     ? { opacity: 1 }
     : { opacity: 0, y: 8, rotateY: -8 };
+
+  const handleUnlock = async (passphrase: string) => {
+    await unlock(passphrase);
+  };
+
+  if (isLocked || isUninitialized) {
+    return (
+      <div className="min-h-screen relative">
+        <ErrorBoundary label="atmosphere" compact>
+          <Atmosphere />
+        </ErrorBoundary>
+        <UnlockScreen
+          onUnlock={handleUnlock}
+          isUninitialized={isUninitialized}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative">
@@ -124,15 +146,18 @@ export function Layout() {
         <span className="flex items-center gap-2 text-base font-display font-semibold tracking-tight">
           <ModeSwitcherSheet />
         </span>
-        <button
-          type="button"
-          onClick={open}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted"
-          aria-label="Open command palette"
-        >
-          <Command className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-          <kbd className="rounded border border-border bg-surface px-1 font-sans text-[10px]">K</kbd>
-        </button>
+        <div className="flex items-center gap-3">
+          <VaultIndicator />
+          <button
+            type="button"
+            onClick={open}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-muted"
+            aria-label="Open command palette"
+          >
+            <Command className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
+            <kbd className="rounded border border-border bg-surface px-1 font-sans text-[10px]">K</kbd>
+          </button>
+        </div>
       </header>
 
       {/* Mobile bottom tab bar */}
