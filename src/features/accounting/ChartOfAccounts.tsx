@@ -426,6 +426,8 @@ return (
   );
 }
 
+export default ChartOfAccounts;
+
 interface AccountFormData {
   code: string;
   name: string;
