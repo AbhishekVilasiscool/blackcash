@@ -69,6 +69,11 @@ export function ContactDetailPage() {
       setInteractions(loadedInteractions);
       setLinks(loadedLinks);
       setLoading(false);
+    }).catch(() => {
+      // Site storage blocked (or any other read failure): stop loading so
+      // the page renders its empty state; Layout owns the blocked UX.
+      if (cancelled) return;
+      setLoading(false);
     });
     return () => {
       cancelled = true;

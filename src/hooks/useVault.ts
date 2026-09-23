@@ -1,6 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { db } from "../lib/db";
 import {
+  ensureStorageAvailable,
+  isStorageBlockedError,
+  STORAGE_BLOCKED_MESSAGE,
+  StorageBlockedError,
+} from "../lib/storageHealth";
+import {
   initializeVault,
   unlockVault,
   type VaultMetadata,
@@ -15,22 +21,53 @@ const AUTO_LOCK_KEY = "auto_lock_minutes";
 
 type VaultStatus = "uninitialized" | "locked" | "unlocked";
 
+interface VaultSnapshot {
+  status: VaultStatus;
+  isLocked: boolean;
+  isUnlocked: boolean;
+  isUninitialized: boolean;
+  metadata: VaultMetadata | null;
+  /** True once the browser has refused IndexedDB access. Set once, never retried. */
+  storageBlocked: boolean;
+  /** Human-readable detail for the blocked-storage screen; null otherwise. */
+  storageError: string | null;
+}
+
 function createVaultStore() {
   let status: VaultStatus = "uninitialized";
   let key: CryptoKey | null = null;
   let metadata: VaultMetadata | null = null;
+  let storageBlocked = false;
+  let storageError: string | null = null;
   let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
+  // Probe-once guard: every mounted useVault() consumer effects initialize(),
+  // but the storage probe must run exactly once — never a retry storm.
+  let initializePromise: Promise<void> | null = null;
   const listeners = new Set<() => void>();
 
-  const notify = () => listeners.forEach((l) => l());
-
-  const getSnapshot = () => ({
+  const makeSnapshot = (): VaultSnapshot => ({
     status,
     isLocked: status === "locked",
     isUnlocked: status === "unlocked",
     isUninitialized: status === "uninitialized",
     metadata,
+    storageBlocked,
+    storageError,
   });
+
+  // The snapshot object identity is stable between publishes. Returning a
+  // fresh object from getSnapshot on every call violates the
+  // useSyncExternalStore caching contract and risks render loops.
+  let snapshot: VaultSnapshot = makeSnapshot();
+
+  const notify = () => listeners.forEach((l) => l());
+
+  const publish = () => {
+    snapshot = makeSnapshot();
+    notify();
+  };
+
+  const getSnapshot = () => snapshot;
 
   const subscribe = (listener: () => void) => {
     listeners.add(listener);
@@ -46,35 +83,79 @@ function createVaultStore() {
     }
   };
 
-  const initialize = async () => {
-    const setting = await db.settings.get(VAULT_METADATA_KEY);
-    if (setting !== undefined) {
+  const initialize = () => {
+    if (initializePromise !== null) return initializePromise;
+    initializePromise = (async () => {
       try {
-        metadata = JSON.parse(setting.value);
-        status = "locked";
-        notify();
-      } catch {
+        // Explicit open first so a browser storage denial is classified here,
+        // once, instead of surfacing as assorted Dexie errors later.
+        await ensureStorageAvailable();
+      } catch (error) {
+        if (error instanceof StorageBlockedError) {
+          storageBlocked = true;
+          storageError = error.message;
+          status = "uninitialized";
+          publish();
+          return;
+        }
+        console.error("[vault] Unexpected error while opening storage:", error);
         status = "uninitialized";
-        notify();
+        publish();
+        return;
       }
-    } else {
-      status = "uninitialized";
-      notify();
-    }
+      let setting;
+      try {
+        setting = await db.settings.get(VAULT_METADATA_KEY);
+      } catch (error) {
+        if (isStorageBlockedError(error)) {
+          storageBlocked = true;
+          storageError = STORAGE_BLOCKED_MESSAGE;
+        } else {
+          console.error("[vault] Unexpected error while reading vault metadata:", error);
+        }
+        status = "uninitialized";
+        publish();
+        return;
+      }
+      if (setting !== undefined) {
+        try {
+          metadata = JSON.parse(setting.value);
+          status = "locked";
+          publish();
+        } catch {
+          status = "uninitialized";
+          publish();
+        }
+      } else {
+        status = "uninitialized";
+        publish();
+      }
+    })();
+    return initializePromise;
   };
 
   const setup = async (passphrase: string, autoLockMinutes = 15) => {
     const newMetadata = await initializeVault(passphrase);
     newMetadata.autoLockMinutes = autoLockMinutes;
     metadata = newMetadata;
-    await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
-    await db.settings.put({ key: AUTO_LOCK_KEY, value: String(autoLockMinutes) });
+    try {
+      await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
+      await db.settings.put({ key: AUTO_LOCK_KEY, value: String(autoLockMinutes) });
+    } catch (error) {
+      if (isStorageBlockedError(error)) {
+        storageBlocked = true;
+        storageError = STORAGE_BLOCKED_MESSAGE;
+        publish();
+        throw new StorageBlockedError(error instanceof Error ? error.message : undefined);
+      }
+      throw error;
+    }
 
     const derivedKey = await unlockVault(passphrase, metadata);
     key = derivedKey;
     status = "unlocked";
     setAutoLockTimer(autoLockMinutes);
-    notify();
+    publish();
   };
 
   const unlock = async (passphrase: string) => {
@@ -83,7 +164,7 @@ function createVaultStore() {
     key = derivedKey;
     status = "unlocked";
     setAutoLockTimer(metadata.autoLockMinutes);
-    notify();
+    publish();
   };
 
   const lock = () => {
@@ -91,7 +172,7 @@ function createVaultStore() {
     autoLockTimer = null;
     key = null;
     status = metadata ? "locked" : "uninitialized";
-    notify();
+    publish();
   };
 
   const changePassphrase = async (oldPassphrase: string, newPassphrase: string, autoLockMinutes?: number) => {
@@ -106,21 +187,41 @@ function createVaultStore() {
     const newKey = await unlockVault(newPassphrase, metadata);
     key = newKey;
 
-    await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
-    if (autoLockMinutes !== undefined) {
-      await db.settings.put({ key: AUTO_LOCK_KEY, value: String(autoLockMinutes) });
+    try {
+      await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
+      if (autoLockMinutes !== undefined) {
+        await db.settings.put({ key: AUTO_LOCK_KEY, value: String(autoLockMinutes) });
+      }
+    } catch (error) {
+      if (isStorageBlockedError(error)) {
+        storageBlocked = true;
+        storageError = STORAGE_BLOCKED_MESSAGE;
+        publish();
+        throw new StorageBlockedError(error instanceof Error ? error.message : undefined);
+      }
+      throw error;
     }
     setAutoLockTimer(metadata.autoLockMinutes);
-    notify();
+    publish();
   };
 
   const setAutoLock = async (minutes: number) => {
     if (!metadata) return;
     metadata.autoLockMinutes = minutes;
-    await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
-    await db.settings.put({ key: AUTO_LOCK_KEY, value: String(minutes) });
+    try {
+      await db.settings.put({ key: VAULT_METADATA_KEY, value: JSON.stringify(metadata) });
+      await db.settings.put({ key: AUTO_LOCK_KEY, value: String(minutes) });
+    } catch (error) {
+      if (isStorageBlockedError(error)) {
+        storageBlocked = true;
+        storageError = STORAGE_BLOCKED_MESSAGE;
+        publish();
+        throw new StorageBlockedError(error instanceof Error ? error.message : undefined);
+      }
+      throw error;
+    }
     setAutoLockTimer(minutes);
-    notify();
+    publish();
   };
 
   const getKey = () => key;

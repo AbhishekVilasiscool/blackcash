@@ -31,12 +31,20 @@ function createAtmosphereStore() {
     if (level !== newLevel) {
       level = newLevel;
       listeners.forEach((listener) => listener());
-      void db.settings.put({ key: ATMOSPHERE_KEY, value: newLevel });
+      // Best-effort persistence; silent when site storage is blocked.
+      void db.settings.put({ key: ATMOSPHERE_KEY, value: newLevel }).catch(() => undefined);
     }
   };
 
   const initialize = async () => {
-    const setting = await db.settings.get(ATMOSPHERE_KEY);
+    let setting;
+    try {
+      setting = await db.settings.get(ATMOSPHERE_KEY);
+    } catch {
+      // Storage blocked or otherwise unavailable: keep the default level.
+      // The vault store owns the honest blocked-storage UX.
+      return;
+    }
     if (setting !== undefined && (setting.value === "full" || setting.value === "lite" || setting.value === "off")) {
       level = setting.value;
       listeners.forEach((listener) => listener());

@@ -35,6 +35,11 @@ export function ContactsPage() {
       if (cancelled) return;
       setContacts(rows);
       setLoading(false);
+    }).catch(() => {
+      // Site storage blocked (or any other read failure): show the empty
+      // list instead of spinning forever; Layout owns the blocked UX.
+      if (cancelled) return;
+      setLoading(false);
     });
     return () => {
       cancelled = true;

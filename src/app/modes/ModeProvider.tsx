@@ -31,11 +31,13 @@ export function ModeProvider({ children, initialMode = "accountant" }: ModeProvi
 
   useEffect(() => {
     let cancelled = false;
+    // Best-effort persistence: when site storage is blocked this rejects;
+    // the vault store owns the honest blocked-storage UX, so just stay silent.
     void db.settings.get(ACTIVE_MODE_KEY).then((setting) => {
       if (!cancelled && setting !== undefined && isKnownModeId(setting.value)) {
         setModeId(setting.value);
       }
-    });
+    }).catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -51,7 +53,7 @@ export function ModeProvider({ children, initialMode = "accountant" }: ModeProvi
 
   const setMode = useCallback((next: ModeId) => {
     setModeId(next);
-    void db.settings.put({ key: ACTIVE_MODE_KEY, value: next });
+    void db.settings.put({ key: ACTIVE_MODE_KEY, value: next }).catch(() => undefined);
   }, []);
 
   const value = useMemo<ModeContextValue>(

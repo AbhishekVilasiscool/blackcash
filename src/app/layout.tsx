@@ -13,6 +13,7 @@ import { toRomanNumeral } from "../components/ornament/RomanNumeral";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { VaultIndicator } from "../components/ui/VaultIndicator";
 import { UnlockScreen } from "../components/ui/UnlockScreen";
+import { StorageBlockedScreen } from "../components/ui/StorageBlockedScreen";
 import { useVault } from "../hooks/useVault";
 
 function DashboardNavItem({ compact = false }: { compact?: boolean }) {
@@ -77,7 +78,7 @@ export function Layout() {
   const { open } = useCommandPalette();
   const { modeId, mode } = useMode();
   const [moreOpen, setMoreOpen] = useState(false);
-  const { isLocked, isUninitialized, unlock } = useVault();
+  const { isLocked, isUninitialized, storageBlocked, storageError, unlock, setup } = useVault();
 
   const groups = getGroupedModules(modeId);
   const keyModules = getKeyModules(modeId, 4);
@@ -90,6 +91,22 @@ export function Layout() {
     await unlock(passphrase);
   };
 
+  const handleSetup = async (passphrase: string, autoLockMinutes: number) => {
+    await setup(passphrase, autoLockMinutes);
+  };
+
+  // Browser refused IndexedDB access (strict privacy settings, shields, or
+  // private browsing). This short-circuits BOTH the first-load setup path
+  // and the return-visit unlock path with one honest screen — no retries,
+  // no render loops; the user allows storage and reloads.
+  if (storageBlocked) {
+    return (
+      <div className="min-h-screen relative">
+        <StorageBlockedScreen technicalDetail={storageError ?? undefined} />
+      </div>
+    );
+  }
+
   if (isLocked || isUninitialized) {
     return (
       <div className="min-h-screen relative">
@@ -98,6 +115,7 @@ export function Layout() {
         </ErrorBoundary>
         <UnlockScreen
           onUnlock={handleUnlock}
+          onSetup={handleSetup}
           isUninitialized={isUninitialized}
         />
       </div>

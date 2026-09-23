@@ -8,10 +8,11 @@ import { Input } from "./Input";
 
 interface UnlockScreenProps {
   onUnlock: (passphrase: string) => Promise<void>;
+  onSetup: (passphrase: string, autoLockMinutes: number) => Promise<void>;
   isUninitialized?: boolean;
 }
 
-export function UnlockScreen({ onUnlock, isUninitialized = false }: UnlockScreenProps) {
+export function UnlockScreen({ onUnlock, onSetup, isUninitialized = false }: UnlockScreenProps) {
   const [passphrase, setPassphrase] = useState("");
   const [showPassphrase, setShowPassphrase] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +36,7 @@ export function UnlockScreen({ onUnlock, isUninitialized = false }: UnlockScreen
     }
   };
 
-  const handleSetupSubmit = async (e: FormEvent<HTMLFormElement>, setupFn: (passphrase: string, autoLockMinutes: number) => Promise<void>) => {
+  const handleSetupSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!passphrase || passphrase.length < 8) {
       setSetupError("Passphrase must be at least 8 characters");
@@ -52,7 +53,7 @@ export function UnlockScreen({ onUnlock, isUninitialized = false }: UnlockScreen
     setIsLoading(true);
     setSetupError("");
     try {
-      await setupFn(passphrase, autoLockMinutes);
+      await onSetup(passphrase, autoLockMinutes);
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Failed to setup vault");
     } finally {
@@ -99,7 +100,7 @@ export function UnlockScreen({ onUnlock, isUninitialized = false }: UnlockScreen
               </div>
             )}
 
-            <form onSubmit={(e) => handleSetupSubmit(e, setupFn)} className="space-y-4">
+            <form onSubmit={handleSetupSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-caps text-muted mb-1">Passphrase</label>
                 <Input
@@ -239,8 +240,4 @@ export function UnlockScreen({ onUnlock, isUninitialized = false }: UnlockScreen
       </motion.div>
     </AnimatePresence>
   );
-}
-
-function setupFn(_passphrase: string, _autoLockMinutes: number): Promise<void> {
-  throw new Error("setupFn not connected");
 }
