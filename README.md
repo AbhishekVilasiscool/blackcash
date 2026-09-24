@@ -64,7 +64,7 @@ src/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/blackcash.git
+git clone https://github.com/blackcash-dev/blackcash.git
 cd blackcash
 
 # 2. Install dependencies
