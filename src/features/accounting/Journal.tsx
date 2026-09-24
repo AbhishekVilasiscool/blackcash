@@ -59,6 +59,9 @@ export function Journal() {
   const [showReversalInfo, setShowReversalInfo] = useState<{ originalId: number; reversalId: number } | null>(null);
   const [refresh, setRefresh] = useState(0);
 
+  // Permanent bound for any save that could hang without settling.
+  const SAVE_TIMEOUT_MS = 8000;
+
   const entries = useLiveQuery(
     () => listJournalEntries(db, clientId, { status: statusFilter === "all" ? undefined : statusFilter, query: searchQuery }),
     [clientId, statusFilter, searchQuery, refresh]
@@ -234,6 +237,18 @@ export function Journal() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // TEMP-DIAG (live trace for silent-submit reports — remove once the root
+    // cause is confirmed from a real console trace, keeping the permanent
+    // console.error + timeout below).
+    console.log(
+      "[journal] SUBMIT_CLICKED",
+      JSON.stringify({
+        date: formData.date,
+        memo: formData.memo,
+        reference: formData.reference,
+        lines: formData.lines,
+      }),
+    );
     setSubmitAttempted(true);
     setErrors([]);
 
@@ -242,6 +257,13 @@ export function Journal() {
     // inline errors already show these (submitAttempted is true from here
     // on), so only persistence failures go into the save-error state.
     if (accountErrors.length > 0 || !lineValidation.ok) {
+      console.log(
+        "[journal] SUBMIT_BLOCKED_BY_VALIDATION",
+        JSON.stringify([
+          ...accountErrors,
+          ...(!lineValidation.ok ? lineValidation.errors.map((error) => error.message) : []),
+        ]),
+      );
       return;
     }
 
@@ -258,15 +280,45 @@ export function Journal() {
       memo,
     }));
 
+    // TEMP-DIAG (live trace — see note above).
+    console.log("[journal] CALLING_REPO", JSON.stringify({ entryData, submitLines }));
+
     try {
-      if (editingEntry) {
-        await updateJournalEntry(db, editingEntry.id!, entryData, submitLines);
-      } else {
-        await createJournalEntry(db, { ...entryData, clientId }, submitLines);
-      }
+      const save = editingEntry
+        ? updateJournalEntry(db, editingEntry.id!, entryData, submitLines)
+        : createJournalEntry(db, { ...entryData, clientId }, submitLines);
+      // Permanent: a save that never settles (stuck transaction, storage
+      // blocked mid-session) must surface a message, never hang silently.
+      // The late-settling save still applies normally if it ever resolves.
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          // TEMP-DIAG (live trace — see note above).
+          console.log("[journal] REPO_WRITE_TIMED_OUT after 8000ms");
+          reject(
+            new Error(
+              "Saving is taking too long — your entry may still save in the background. " +
+                "Check the entries list, then try again.",
+            ),
+          );
+        }, SAVE_TIMEOUT_MS);
+      });
+      await Promise.race([save, timeout]);
+      // TEMP-DIAG (live trace — see note above).
+      console.log("[journal] SAVE_SETTLED_OK");
       setRefresh((v) => v + 1);
       handleCloseDrawer();
     } catch (err) {
+      // TEMP-DIAG (live trace — see note above).
+      console.log(
+        "[journal] SAVE_FAILED",
+        JSON.stringify({
+          name: err instanceof Error ? err.name : typeof err,
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        }),
+      );
+      // Permanent, quiet: full error for diagnostics; message for the user.
+      console.error("[journal] Save failed:", err);
       setErrors([err instanceof Error ? err.message : "Failed to save entry"]);
     }
   }
