@@ -21,6 +21,15 @@
   --color-muted: var(--muted);
   --color-danger: var(--danger);
   --color-gold: var(--gold);
+  --color-oxblood: var(--oxblood);
+  /* NOTE: accent tokens MUST stay mapped here. Tailwind v4 only emits
+     bg-accent / text-accent / border-accent / outline-accent utilities when
+     --color-accent exists in @theme. Without this mapping, primary buttons
+     render as dark text on a transparent background (effectively invisible),
+     and every accent highlight app-wide silently loses its styling.
+     --accent / --accent-2 are set per-mode at runtime (see ModeProvider). */
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --radius-card: var(--radius);
   --font-display: var(--font-display);
   --font-caps: var(--font-caps);

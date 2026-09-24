@@ -2,7 +2,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState, useMemo } from "react";
 import { Plus, Edit, Search, Save, RotateCcw, X, CheckCircle2 } from "lucide-react";
 import { db } from "../../lib/db";
-import type { JournalEntry } from "../../lib/db";
+import type { JournalEntry, JournalLine } from "../../lib/db";
+import { validateEntry } from "../../lib/finance/ledger";
 import { Card } from "../../components/ornament/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -54,6 +55,7 @@ export function Journal() {
     lines: [emptyLine()],
   });
   const [errors, setErrors] = useState<string[]>([]);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [showReversalInfo, setShowReversalInfo] = useState<{ originalId: number; reversalId: number } | null>(null);
   const [refresh, setRefresh] = useState(0);
 
@@ -67,17 +69,90 @@ export function Journal() {
     [clientId]
   ) ?? [];
 
-  const runningTotals = useMemo(() => {
-    let totalDebit = 0;
-    let totalCredit = 0;
-    for (const line of formData.lines) {
-      totalDebit += parseFloat(line.debit) || 0;
-      totalCredit += parseFloat(line.credit) || 0;
-    }
-    return { totalDebit, totalCredit, balanced: totalDebit === totalCredit && totalDebit > 0 };
-  }, [formData.lines]);
+  // Single source of truth for line validity: the tested ledger validator.
+  // The form maps its string inputs to candidate lines WITHOUT filtering
+  // anything out, so every violation surfaces as a visible inline error.
+  // (The old code filtered invalid lines away before checking, which let the
+  // badge and the submit button disagree with what submit would actually do.)
+  const candidateLines: JournalLine[] = useMemo(
+    () =>
+      formData.lines.map((line) => ({
+        entryId: editingEntry?.id ?? 0,
+        accountId: line.accountId === "" ? Number.NaN : parseInt(line.accountId, 10),
+        debit: parseFloat(line.debit) || 0,
+        credit: parseFloat(line.credit) || 0,
+        memo: line.memo,
+        createdAt: "",
+      })),
+    [formData.lines, editingEntry],
+  );
 
-  const canPost = runningTotals.balanced && formData.lines.length >= 2 && formData.memo.trim() !== "" && formData.date !== "";
+  const candidateEntry: JournalEntry = useMemo(
+    () => ({
+      id: editingEntry?.id,
+      date: formData.date,
+      memo: formData.memo,
+      reference: formData.reference,
+      clientId,
+      createdAt: "",
+      updatedAt: "",
+      status: "draft" as const,
+    }),
+    [editingEntry, formData.date, formData.memo, formData.reference, clientId],
+  );
+
+  // validateEntry() knows nothing about account selection (it sees numeric
+  // ids), so the form adds exactly one rule of its own: every line needs an
+  // account. All other ledger rules come straight from the lib function.
+  const accountErrors: string[] = useMemo(
+    () =>
+      formData.lines.flatMap((line, index) =>
+        line.accountId === "" ? [`Line ${index + 1}: Select an account`] : [],
+      ),
+    [formData.lines],
+  );
+
+  const lineValidation = useMemo(
+    () => validateEntry(candidateEntry, candidateLines),
+    [candidateEntry, candidateLines],
+  );
+
+  const linesValid = accountErrors.length === 0 && lineValidation.ok;
+
+  const totals = useMemo(
+    () => ({
+      totalDebit: candidateLines.reduce((sum, line) => sum + line.debit, 0),
+      totalCredit: candidateLines.reduce((sum, line) => sum + line.credit, 0),
+    }),
+    [candidateLines],
+  );
+
+  const canPost =
+    linesValid &&
+    formData.lines.length >= 2 &&
+    formData.memo.trim() !== "" &&
+    formData.date !== "";
+
+  const isDirty = useMemo(
+    () =>
+      formData.memo.trim() !== "" ||
+      formData.reference.trim() !== "" ||
+      formData.lines.some(
+        (line) => line.accountId !== "" || line.debit !== "" || line.credit !== "" || line.memo !== "",
+      ),
+    [formData],
+  );
+
+  // Live inline errors: always computed, but only shown once the user has
+  // interacted (dirty) or attempted a submit — never shouting at a pristine form.
+  const liveErrors: string[] = useMemo(
+    () => [
+      ...accountErrors,
+      ...(lineValidation.ok ? [] : lineValidation.errors.map((error) => error.message)),
+    ],
+    [accountErrors, lineValidation],
+  );
+  const visibleLiveErrors = liveErrors.length > 0 && (submitAttempted || isDirty) ? liveErrors : [];
 
   function resetForm() {
     setFormData({
@@ -87,6 +162,7 @@ export function Journal() {
       lines: [emptyLine()],
     });
     setErrors([]);
+    setSubmitAttempted(false);
     setEditingEntry(null);
   }
 
@@ -114,11 +190,22 @@ export function Journal() {
     setIsDrawerOpen(false);
     setEditingEntry(null);
     setErrors([]);
+    setSubmitAttempted(false);
   }
 
   function updateLine(index: number, field: keyof LineFormData, value: string) {
     const newLines = [...formData.lines];
-    newLines[index] = { ...newLines[index], [field]: value };
+    const updated = { ...newLines[index], [field]: value };
+    // Debit and credit are mutually exclusive per line (ledger core rule):
+    // entering a nonzero value on one side clears the other side, so the
+    // invalid both-sides state cannot even be constructed in the UI.
+    if (field === "debit" && value.trim() !== "" && Number(value) !== 0) {
+      updated.credit = "";
+    }
+    if (field === "credit" && value.trim() !== "" && Number(value) !== 0) {
+      updated.debit = "";
+    }
+    newLines[index] = updated;
     setFormData({ ...formData, lines: newLines });
     setErrors([]);
   }
@@ -135,26 +222,14 @@ export function Journal() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitAttempted(true);
     setErrors([]);
 
-    const validLines = formData.lines
-      .map((line) => ({
-        accountId: parseInt(line.accountId, 10),
-        debit: parseFloat(line.debit) || 0,
-        credit: parseFloat(line.credit) || 0,
-        memo: line.memo,
-      }))
-      .filter((line) => line.accountId && (line.debit > 0 || line.credit > 0));
-
-    if (validLines.length < 2) {
-      setErrors(["At least 2 lines with amounts are required"]);
-      return;
-    }
-
-    const totalDebit = validLines.reduce((sum, l) => sum + l.debit, 0);
-    const totalCredit = validLines.reduce((sum, l) => sum + l.credit, 0);
-    if (totalDebit !== totalCredit) {
-      setErrors([`Debits (${totalDebit.toFixed(2)}) must equal credits (${totalCredit.toFixed(2)})`]);
+    // The exact same validation the badge and the submit button use — there
+    // is only one implementation of "is this valid", in ledger.ts. The live
+    // inline errors already show these (submitAttempted is true from here
+    // on), so only persistence failures go into the save-error state.
+    if (accountErrors.length > 0 || !lineValidation.ok) {
       return;
     }
 
@@ -164,12 +239,18 @@ export function Journal() {
       reference: formData.reference,
       status: "draft",
     };
+    const submitLines = candidateLines.map(({ accountId, debit, credit, memo }) => ({
+      accountId,
+      debit,
+      credit,
+      memo,
+    }));
 
     try {
       if (editingEntry) {
-        await updateJournalEntry(db, editingEntry.id!, entryData, validLines);
+        await updateJournalEntry(db, editingEntry.id!, entryData, submitLines);
       } else {
-        await createJournalEntry(db, { ...entryData, clientId }, validLines);
+        await createJournalEntry(db, { ...entryData, clientId }, submitLines);
       }
       setRefresh((v) => v + 1);
       handleCloseDrawer();
@@ -362,10 +443,10 @@ export function Journal() {
             </button>
           </div>
 
-          {errors.length > 0 && (
+          {(visibleLiveErrors.length > 0 || errors.length > 0) && (
             <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
               <ul className="list-disc pl-4 space-y-1">
-                {errors.map((err, i) => <li key={i}>{err}</li>)}
+                {[...visibleLiveErrors, ...errors].map((err, i) => <li key={i}>{err}</li>)}
               </ul>
             </div>
           )}
@@ -427,6 +508,7 @@ export function Journal() {
                           <select
                             value={line.accountId}
                             onChange={(e) => updateLine(index, "accountId", e.target.value)}
+                            aria-label={`Line ${index + 1} account`}
                             className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-2 focus:outline-accent"
                           >
                             <option value="">Select account</option>
@@ -444,7 +526,9 @@ export function Journal() {
                             min="0"
                             value={line.debit}
                             onChange={(e) => updateLine(index, "debit", e.target.value)}
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent"
+                            disabled={line.credit.trim() !== "" && Number(line.credit) !== 0}
+                            aria-label={`Line ${index + 1} debit`}
+                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
                             placeholder="0.00"
                           />
                         </td>
@@ -455,7 +539,9 @@ export function Journal() {
                             min="0"
                             value={line.credit}
                             onChange={(e) => updateLine(index, "credit", e.target.value)}
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent"
+                            disabled={line.debit.trim() !== "" && Number(line.debit) !== 0}
+                            aria-label={`Line ${index + 1} credit`}
+                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
                             placeholder="0.00"
                           />
                         </td>
@@ -464,6 +550,7 @@ export function Journal() {
                             type="text"
                             value={line.memo}
                             onChange={(e) => updateLine(index, "memo", e.target.value)}
+                            aria-label={`Line ${index + 1} memo`}
                             className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-2 focus:outline-accent"
                             placeholder="Line memo"
                           />
@@ -479,11 +566,11 @@ export function Journal() {
                   <tfoot>
                     <tr className="bg-white/5 font-bold">
                       <td className="p-2 text-right font-caps text-[10px] tracking-wider">Totals</td>
-                      <td className="p-2 text-right font-mono tabular-nums text-text">{runningTotals.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="p-2 text-right font-mono tabular-nums text-text">{runningTotals.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="p-2 text-right font-mono tabular-nums text-text">{totals.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="p-2 text-right font-mono tabular-nums text-text">{totals.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="p-2">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium ${runningTotals.balanced ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
-                          {runningTotals.balanced ? "Balanced" : "Unbalanced"}
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium ${linesValid ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+                          {linesValid ? "Balanced" : "Unbalanced"}
                         </span>
                       </td>
                       <td className="p-2"></td>
