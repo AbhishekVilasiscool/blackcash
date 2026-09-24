@@ -74,6 +74,7 @@ export function ChartOfAccounts() {
     isActive: true,
   });
   const [showInactive, setShowInactive] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const accounts = useLiveQuery(
     () => db.accounts.where("clientId").equals(clientId).toArray(),
@@ -126,14 +127,36 @@ export function ChartOfAccounts() {
         isActive: true,
       });
     }
+    setSubmitError(null);
     setIsDrawerOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+
+    const code = formData.code.trim();
+    const name = formData.name.trim();
+    if (code === "" || name === "") {
+      setSubmitError("Code and name are required.");
+      return;
+    }
+    // Account codes must be unique per client — duplicates silently corrupt
+    // reports that key off codes.
+    const duplicate = await db.accounts
+      .where("clientId")
+      .equals(clientId)
+      .filter((a) => a.code === code && a.id !== editingAccount?.id)
+      .first()
+      .catch(() => undefined);
+    if (duplicate) {
+      setSubmitError(`Code "${code}" is already used by "${duplicate.name}".`);
+      return;
+    }
+
     const data = {
-      code: formData.code,
-      name: formData.name,
+      code,
+      name,
       type: formData.type,
       subtype: formData.subtype,
       parentId: formData.parentId ? parseInt(formData.parentId) : undefined,
@@ -142,10 +165,16 @@ export function ChartOfAccounts() {
       updatedAt: new Date().toISOString(),
     };
 
-    if (editingAccount) {
-      await db.accounts.update(editingAccount.id!, { ...data, createdAt: editingAccount.createdAt });
-    } else {
-      await db.accounts.add({ ...data, createdAt: new Date().toISOString() });
+    try {
+      if (editingAccount) {
+        await db.accounts.update(editingAccount.id!, { ...data, createdAt: editingAccount.createdAt });
+      } else {
+        await db.accounts.add({ ...data, createdAt: new Date().toISOString() });
+      }
+    } catch (err) {
+      // e.g. site storage blocked after the page loaded.
+      setSubmitError(err instanceof Error ? err.message : "Failed to save account.");
+      return;
     }
     setIsDrawerOpen(false);
     setEditingAccount(null);
@@ -296,6 +325,14 @@ return (
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {submitError && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
+                >
+                  {submitError}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-caps text-muted mb-1">Code</label>

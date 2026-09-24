@@ -233,6 +233,19 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Omit<Account, "id" | "createdAt" | "upda
  * Local-first storage layer for double-entry accounting.
  * Everything lives in the browser's IndexedDB — no backend, no account, nothing leaves the device.
  */
+/**
+ * Seed the default chart of accounts for a new client workspace.
+ *
+ * Idempotent per clientId (skips when any accounts already exist) and
+ * concurrency-safe (concurrent callers share one in-flight task), so it is
+ * safe to call on every app start. Deliberately independent of vault state:
+ * every reader/writer of accounts in the app uses this same table directly,
+ * so seeds must exist before — and regardless of — vault setup/unlock.
+ * (If account encryption is ever activated, all readers must migrate
+ * together with this seeder; see useEncryptedDb, currently unused.)
+ */
+const seedInFlight = new Map<number, Promise<void>>();
+
 export class BlackcashDatabase extends Dexie {
   accounts!: EntityTable<Account, "id">;
   journalEntries!: EntityTable<JournalEntry, "id">;
@@ -259,17 +272,27 @@ export class BlackcashDatabase extends Dexie {
    * Seed the default chart of accounts for a new client workspace.
    */
   async seedChartOfAccounts(clientId: number): Promise<void> {
-    const existingCount = await this.accounts.where("clientId").equals(clientId).count();
-    if (existingCount > 0) return;
+    const inFlight = seedInFlight.get(clientId);
+    if (inFlight) return inFlight;
+    const task = (async () => {
+      const existingCount = await this.accounts.where("clientId").equals(clientId).count();
+      if (existingCount > 0) return;
 
-    const now = new Date().toISOString();
-    const accounts = DEFAULT_CHART_OF_ACCOUNTS.map((acc) => ({
-      ...acc,
-      clientId,
-      createdAt: now,
-      updatedAt: now,
-    }));
-    await this.accounts.bulkAdd(accounts);
+      const now = new Date().toISOString();
+      const accounts = DEFAULT_CHART_OF_ACCOUNTS.map((acc) => ({
+        ...acc,
+        clientId,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      await this.accounts.bulkAdd(accounts);
+    })();
+    seedInFlight.set(clientId, task);
+    try {
+      await task;
+    } finally {
+      seedInFlight.delete(clientId);
+    }
   }
 }
 

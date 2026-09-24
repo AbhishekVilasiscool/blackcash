@@ -15,6 +15,8 @@ import { VaultIndicator } from "../components/ui/VaultIndicator";
 import { UnlockScreen } from "../components/ui/UnlockScreen";
 import { StorageBlockedScreen } from "../components/ui/StorageBlockedScreen";
 import { useVault } from "../hooks/useVault";
+import { useClientId } from "../hooks/useClientId";
+import { useSeedDefaults } from "../hooks/useSeedDefaults";
 
 function DashboardNavItem({ compact = false }: { compact?: boolean }) {
   return (
@@ -79,6 +81,10 @@ export function Layout() {
   const { modeId, mode } = useMode();
   const [moreOpen, setMoreOpen] = useState(false);
   const { isLocked, isUninitialized, storageBlocked, storageError, unlock, setup } = useVault();
+  const clientId = useClientId();
+  // Default chart of accounts for new/empty databases — every route, every
+  // launch, regardless of vault timing. No-op when accounts already exist.
+  useSeedDefaults(clientId);
 
   const groups = getGroupedModules(modeId);
   const keyModules = getKeyModules(modeId, 4);
