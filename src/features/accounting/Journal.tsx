@@ -500,7 +500,12 @@ export function Journal() {
             <div className="border-t border-border pt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-caps text-sm tracking-wider text-muted">Lines</h3>
-                <Button variant="ghost" className="px-3 py-1.5 text-sm" onClick={addLine} disabled={formData.lines.length >= 20}>
+                <Button
+                  variant="ghost"
+                  className={`px-3 py-1.5 text-sm ${formData.lines.length < 2 ? "ring-2 ring-accent/60" : ""}`}
+                  onClick={addLine}
+                  disabled={formData.lines.length >= 20}
+                >
                   <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Line
                 </Button>
               </div>
@@ -543,8 +548,17 @@ export function Journal() {
                             onChange={(e) => updateLine(index, "debit", e.target.value)}
                             disabled={line.credit.trim() !== "" && Number(line.credit) !== 0}
                             aria-label={`Line ${index + 1} debit`}
+                            title={
+                              line.credit.trim() !== "" && Number(line.credit) !== 0
+                                ? "This line already has a credit — clear Credit to enter a debit."
+                                : "Debit amount for this line"
+                            }
                             className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
-                            placeholder="0.00"
+                            placeholder={
+                              line.credit.trim() !== "" && Number(line.credit) !== 0
+                                ? "already credited"
+                                : "0.00"
+                            }
                           />
                         </td>
                         <td className="p-2">
@@ -556,8 +570,17 @@ export function Journal() {
                             onChange={(e) => updateLine(index, "credit", e.target.value)}
                             disabled={line.debit.trim() !== "" && Number(line.debit) !== 0}
                             aria-label={`Line ${index + 1} credit`}
+                            title={
+                              line.debit.trim() !== "" && Number(line.debit) !== 0
+                                ? "This line already has a debit — clear Debit to enter a credit."
+                                : "Credit amount for this line"
+                            }
                             className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
-                            placeholder="0.00"
+                            placeholder={
+                              line.debit.trim() !== "" && Number(line.debit) !== 0
+                                ? "already debited"
+                                : "0.00"
+                            }
                           />
                         </td>
                         <td className="p-2">
@@ -593,6 +616,18 @@ export function Journal() {
                   </tfoot>
                 </table>
               </div>
+              {formData.lines.length < 2 && (
+                <div className="mt-3 rounded-xl border border-accent/50 bg-accent/10 p-3">
+                  <p className="text-sm font-medium text-text">
+                    Add at least one more line to balance this entry.
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Double-entry needs both sides — use the highlighted{" "}
+                    <span className="font-semibold text-accent">Add Line</span> button above,
+                    then pick an account and an amount for each line.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 pt-4 border-t border-border">

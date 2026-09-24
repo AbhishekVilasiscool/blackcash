@@ -204,6 +204,55 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     unmount();
   });
 
+  test("disabled side explains itself in the field: placeholder names the reason", async () => {
+    await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+
+    const debit = screen.getByLabelText("Line 1 debit") as HTMLInputElement;
+    const credit = screen.getByLabelText("Line 1 credit") as HTMLInputElement;
+    expect(debit.getAttribute("placeholder")).toBe("0.00");
+    expect(credit.getAttribute("placeholder")).toBe("0.00");
+
+    fireEvent.change(debit, { target: { value: "250" } });
+    expect(credit.disabled).toBe(true);
+    expect(credit.getAttribute("placeholder")).toBe("already debited");
+    expect(credit.getAttribute("title")).toMatch(/already has a debit/i);
+
+    // Clearing the debit restores the credit field to normal.
+    fireEvent.change(debit, { target: { value: "" } });
+    expect(credit.disabled).toBe(false);
+    expect(credit.getAttribute("placeholder")).toBe("0.00");
+
+    unmount();
+  });
+
+  test("single line gets an unmissable callout plus a highlighted Add Line button", async () => {
+    await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+
+    // One line: callout visible, Add Line ringed.
+    expect(
+      screen.getByText("Add at least one more line to balance this entry."),
+    ).toBeInTheDocument();
+    const addLine = screen.getByRole("button", { name: /add line/i });
+    expect(addLine.className).toContain("ring-accent/60");
+
+    // Two lines: callout gone, highlight gone.
+    fireEvent.click(addLine);
+    expect(
+      screen.queryByText("Add at least one more line to balance this entry."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add line/i }).className).not.toContain(
+      "ring-accent/60",
+    );
+
+    unmount();
+  });
+
   test("primary submit button is always rendered (never invisible), only enabled/disabled", async () => {
     await seedTwoAccounts();
     const { unmount } = render(<Journal />);
