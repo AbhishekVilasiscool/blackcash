@@ -64,3 +64,8 @@ vi.mock("framer-motion", () => ({
 }));
 
 (globalThis as Record<string, unknown>).expect = expect;
+
+// TEMP-DIAG (remove together with the Create Entry alert() trace): jsdom
+// does not implement window.alert, so stub it to keep submit-click tests
+// quiet instead of logging "not implemented" noise.
+window.alert = vi.fn();

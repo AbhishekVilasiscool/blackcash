@@ -702,7 +702,18 @@ export function Journal() {
                 </Button>
               )}
               {!editingEntry && (
-                <Button type="submit" className="flex-1" disabled={!canPost}>
+                <Button
+                  type="submit"
+                  className="flex-1"
+                  disabled={!canPost}
+                  // TEMP-DIAG (live click trace — remove after the yes/no
+                  // answer is in): bypasses ALL console filtering. If this
+                  // alert does NOT pop on click, the click never reaches the
+                  // button (overlay swallow or actually-disabled button).
+                  // If it pops but no [journal] SUBMIT_CLICKED follows in
+                  // the console, the form submit itself is blocked upstream.
+                  onClick={() => alert("SUBMIT HANDLER REACHED")}
+                >
                   <Save className="h-3.5 w-3.5 mr-1.5" /> Create Entry
                 </Button>
               )}
