@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { db } from "../../lib/db";
 import { Journal } from "./Journal";
 
@@ -92,9 +92,11 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
     expect(screen.getByText("Unbalanced")).toBeInTheDocument();
     expect(submitButton().disabled).toBe(true);
-    // …with a visible per-line error, not a silent filter.
-    expect(screen.getByText("Line 1: Select an account")).toBeInTheDocument();
-    expect(screen.getByText("Line 2: Select an account")).toBeInTheDocument();
+    // …with visible per-line errors in the alert box (the status hint may
+    // echo the first one — scope to the alert to assert the error list).
+    const alert = screen.getByRole("alert");
+    expect(within(alert).getByText("Line 1: Select an account")).toBeInTheDocument();
+    expect(within(alert).getByText("Line 2: Select an account")).toBeInTheDocument();
 
     // Even forcing a submit (e.g. Enter key) is blocked with visible errors
     // and persists nothing. Live errors (not the save-error state) carry this.
@@ -103,7 +105,7 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     fireEvent.submit(form);
     await waitFor(
       () => {
-        expect(screen.getAllByText("Line 1: Select an account")).toHaveLength(1);
+        expect(within(screen.getByRole("alert")).getAllByText("Line 1: Select an account")).toHaveLength(1);
       },
       { timeout: 10000 },
     );
@@ -162,6 +164,45 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     // the 5s default under parallel-worker load (see replica experiment).
     30000,
   );
+
+  test("pristine form explains the disabled submit instead of looking broken", async () => {
+    await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+
+    // Disabled — but with a named next step, not silence…
+    expect(submitButton().disabled).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent(/add a memo/i);
+    // …and without shouting ledger errors at an untouched form.
+    expect(screen.queryByText("Line 1: Select an account")).not.toBeInTheDocument();
+    expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
+
+    unmount();
+  });
+
+  test("single-line entry names the 2-line requirement in the hint", async () => {
+    const { cashId } = await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+
+    fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
+      target: { value: "One liner" },
+    });
+    const line1 = {
+      account: screen.getByLabelText("Line 1 account") as HTMLSelectElement,
+      debit: screen.getByLabelText("Line 1 debit") as HTMLInputElement,
+    };
+    fireEvent.change(line1.account, { target: { value: cashId } });
+    fireEvent.change(line1.debit, { target: { value: "100" } });
+
+    // One complete line is still not submittable — and the UI says why.
+    expect(submitButton().disabled).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent(/at least 2 lines/i);
+
+    unmount();
+  });
 
   test("primary submit button is always rendered (never invisible), only enabled/disabled", async () => {
     await seedTwoAccounts();

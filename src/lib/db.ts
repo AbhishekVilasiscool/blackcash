@@ -232,17 +232,14 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Omit<Account, "id" | "createdAt" | "upda
 /**
  * Local-first storage layer for double-entry accounting.
  * Everything lives in the browser's IndexedDB — no backend, no account, nothing leaves the device.
- */
-/**
- * Seed the default chart of accounts for a new client workspace.
  *
- * Idempotent per clientId (skips when any accounts already exist) and
- * concurrency-safe (concurrent callers share one in-flight task), so it is
- * safe to call on every app start. Deliberately independent of vault state:
- * every reader/writer of accounts in the app uses this same table directly,
- * so seeds must exist before — and regardless of — vault setup/unlock.
- * (If account encryption is ever activated, all readers must migrate
- * together with this seeder; see useEncryptedDb, currently unused.)
+ * Default chart seeding (seedChartOfAccounts) is idempotent, merge-based,
+ * and concurrency-safe, so it is safe to call on every app start.
+ * Deliberately independent of vault state: every reader/writer of accounts
+ * in the app uses this same table directly, so seeds must exist before —
+ * and regardless of — vault setup/unlock. (If account encryption is ever
+ * activated, all readers must migrate together with the seeder; see
+ * useEncryptedDb, currently unused.)
  */
 const seedInFlight = new Map<number, Promise<void>>();
 
@@ -269,17 +266,27 @@ export class BlackcashDatabase extends Dexie {
   }
 
   /**
-   * Seed the default chart of accounts for a new client workspace.
+   * Ensure the default chart of accounts exists for a client workspace.
+   *
+   * Merge semantics (not all-or-nothing): only default codes that are
+   * entirely absent are added. This covers both a fresh database AND a
+   * pre-existing database that never got seeded (e.g. a user who manually
+   * created accounts before seeding was wired up) — their custom accounts
+   * are preserved untouched, and re-running never duplicates anything.
+   * Deactivated accounts are NOT resurrected (their codes still exist).
+   * Concurrency-safe: concurrent callers share one in-flight task.
    */
   async seedChartOfAccounts(clientId: number): Promise<void> {
     const inFlight = seedInFlight.get(clientId);
     if (inFlight) return inFlight;
     const task = (async () => {
-      const existingCount = await this.accounts.where("clientId").equals(clientId).count();
-      if (existingCount > 0) return;
+      const existing = await this.accounts.where("clientId").equals(clientId).toArray();
+      const existingCodes = new Set(existing.map((account) => account.code));
+      const missing = DEFAULT_CHART_OF_ACCOUNTS.filter((acc) => !existingCodes.has(acc.code));
+      if (missing.length === 0) return;
 
       const now = new Date().toISOString();
-      const accounts = DEFAULT_CHART_OF_ACCOUNTS.map((acc) => ({
+      const accounts = missing.map((acc) => ({
         ...acc,
         clientId,
         createdAt: now,

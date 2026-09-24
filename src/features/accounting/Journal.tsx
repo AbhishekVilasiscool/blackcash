@@ -154,6 +154,18 @@ export function Journal() {
   );
   const visibleLiveErrors = liveErrors.length > 0 && (submitAttempted || isDirty) ? liveErrors : [];
 
+  // A disabled submit button with no explanation reads as "the button is
+  // broken". Always name the single next thing blocking submit — gentle
+  // progressive hints, never the full error list on a pristine form.
+  const submitHint: string | null = useMemo(() => {
+    if (canPost) return null;
+    if (formData.memo.trim() === "") return "Add a memo to describe this entry.";
+    if (formData.lines.length < 2) return "Add at least 2 lines — double-entry needs both sides.";
+    if (liveErrors.length > 0) return liveErrors[0];
+    if (formData.date === "") return "Pick a date for this entry.";
+    return "Complete the entry to enable submit.";
+  }, [canPost, formData.memo, formData.lines.length, formData.date, liveErrors]);
+
   function resetForm() {
     setFormData({
       date: new Date().toISOString().split("T")[0],
@@ -444,7 +456,10 @@ export function Journal() {
           </div>
 
           {(visibleLiveErrors.length > 0 || errors.length > 0) && (
-            <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
+            <div
+              role="alert"
+              className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
+            >
               <ul className="list-disc pl-4 space-y-1">
                 {[...visibleLiveErrors, ...errors].map((err, i) => <li key={i}>{err}</li>)}
               </ul>
@@ -605,6 +620,11 @@ export function Journal() {
                 </Button>
               )}
             </div>
+            {submitHint && (
+              <p role="status" className="text-xs text-muted">
+                {submitHint}
+              </p>
+            )}
           </form>
         </div>
       </div>

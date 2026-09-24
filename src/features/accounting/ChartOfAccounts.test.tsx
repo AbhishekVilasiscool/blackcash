@@ -71,6 +71,40 @@ describe("Chart of Accounts seeding and add-account flow", () => {
     unmount();
   });
 
+  test(
+    "pre-existing manual accounts are preserved while missing defaults are backfilled",
+    async () => {
+      // The MENNA scenario: user created accounts before seeding was wired up.
+      const now = new Date().toISOString();
+      await db.accounts.add({
+        code: "0010",
+        name: "MENNA",
+        type: "asset",
+        subtype: "cash",
+        isActive: true,
+        clientId: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.seedChartOfAccounts(1);
+
+      const all = await db.accounts.where("clientId").equals(1).toArray();
+      expect(all).toHaveLength(EXPECTED_SEED_COUNT + 1);
+      // Custom account untouched (not overwritten by any default).
+      expect(all.find((a) => a.code === "0010")?.name).toBe("MENNA");
+      // Every default code now exists.
+      for (const def of DEFAULT_CHART_OF_ACCOUNTS) {
+        expect(all.some((a) => a.code === def.code)).toBe(true);
+      }
+
+      // Re-running changes nothing.
+      await db.seedChartOfAccounts(1);
+      expect(await db.accounts.where("clientId").equals(1).count()).toBe(EXPECTED_SEED_COUNT + 1);
+    },
+    30000,
+  );
+
   // Write-path tests carry an explicit timeout: fake-indexeddb + liveQuery
   // re-renders exceed the 5s default when workers are busy (see Journal T3).
   test(
