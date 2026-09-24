@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState, useMemo } from "react";
-import { Plus, Edit, Search, Save, RotateCcw, X, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Search, Save, RotateCcw, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { db } from "../../lib/db";
 import type { JournalEntry, JournalLine } from "../../lib/db";
 import { validateEntry } from "../../lib/finance/ledger";
@@ -237,18 +237,6 @@ export function Journal() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TEMP-DIAG (live trace for silent-submit reports — remove once the root
-    // cause is confirmed from a real console trace, keeping the permanent
-    // console.error + timeout below).
-    console.log(
-      "[journal] SUBMIT_CLICKED",
-      JSON.stringify({
-        date: formData.date,
-        memo: formData.memo,
-        reference: formData.reference,
-        lines: formData.lines,
-      }),
-    );
     setSubmitAttempted(true);
     setErrors([]);
 
@@ -257,13 +245,6 @@ export function Journal() {
     // inline errors already show these (submitAttempted is true from here
     // on), so only persistence failures go into the save-error state.
     if (accountErrors.length > 0 || !lineValidation.ok) {
-      console.log(
-        "[journal] SUBMIT_BLOCKED_BY_VALIDATION",
-        JSON.stringify([
-          ...accountErrors,
-          ...(!lineValidation.ok ? lineValidation.errors.map((error) => error.message) : []),
-        ]),
-      );
       return;
     }
 
@@ -280,9 +261,6 @@ export function Journal() {
       memo,
     }));
 
-    // TEMP-DIAG (live trace — see note above).
-    console.log("[journal] CALLING_REPO", JSON.stringify({ entryData, submitLines }));
-
     try {
       const save = editingEntry
         ? updateJournalEntry(db, editingEntry.id!, entryData, submitLines)
@@ -292,8 +270,6 @@ export function Journal() {
       // The late-settling save still applies normally if it ever resolves.
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => {
-          // TEMP-DIAG (live trace — see note above).
-          console.log("[journal] REPO_WRITE_TIMED_OUT after 8000ms");
           reject(
             new Error(
               "Saving is taking too long — your entry may still save in the background. " +
@@ -303,21 +279,11 @@ export function Journal() {
         }, SAVE_TIMEOUT_MS);
       });
       await Promise.race([save, timeout]);
-      // TEMP-DIAG (live trace — see note above).
-      console.log("[journal] SAVE_SETTLED_OK");
       setRefresh((v) => v + 1);
       handleCloseDrawer();
     } catch (err) {
-      // TEMP-DIAG (live trace — see note above).
-      console.log(
-        "[journal] SAVE_FAILED",
-        JSON.stringify({
-          name: err instanceof Error ? err.name : typeof err,
-          message: err instanceof Error ? err.message : String(err),
-          stack: err instanceof Error ? err.stack : undefined,
-        }),
-      );
       // Permanent, quiet: full error for diagnostics; message for the user.
+      // The submit path can never fail silently — every rejection lands here.
       console.error("[journal] Save failed:", err);
       setErrors([err instanceof Error ? err.message : "Failed to save entry"]);
     }
@@ -702,24 +668,17 @@ export function Journal() {
                 </Button>
               )}
               {!editingEntry && (
-                <Button
-                  type="submit"
-                  className="flex-1"
-                  disabled={!canPost}
-                  // TEMP-DIAG (live click trace — remove after the yes/no
-                  // answer is in): bypasses ALL console filtering. If this
-                  // alert does NOT pop on click, the click never reaches the
-                  // button (overlay swallow or actually-disabled button).
-                  // If it pops but no [journal] SUBMIT_CLICKED follows in
-                  // the console, the form submit itself is blocked upstream.
-                  onClick={() => alert("SUBMIT HANDLER REACHED")}
-                >
+                <Button type="submit" className="flex-1" disabled={!canPost}>
                   <Save className="h-3.5 w-3.5 mr-1.5" /> Create Entry
                 </Button>
               )}
             </div>
             {submitHint && (
-              <p role="status" className="text-xs text-muted">
+              <p
+                role="status"
+                className="flex items-center gap-1.5 text-xs font-semibold text-accent"
+              >
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 {submitHint}
               </p>
             )}

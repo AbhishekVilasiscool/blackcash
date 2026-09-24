@@ -97,51 +97,28 @@ export async function createJournalEntry(
   entry: Omit<JournalEntry, "id" | "createdAt" | "updatedAt">,
   lines: Omit<JournalLine, "id" | "entryId" | "createdAt">[]
 ): Promise<JournalEntryWithLines> {
-  // TEMP-DIAG (live trace for silent-submit reports — remove once the root
-  // cause is confirmed from a real console trace).
-  console.log("[journalRepo] REPO_ENTRY createJournalEntry", JSON.stringify({ entry, lines }));
   const validation = validateEntry(entry as JournalEntry, lines as JournalLine[]);
   if (!validation.ok) {
-    console.log(
-      "[journalRepo] REPO_VALIDATION_FAILED",
-      JSON.stringify(validation.errors.map((e) => e.message)),
-    );
     throw new Error(validation.errors.map((e) => e.message).join("; "));
   }
 
-  // TEMP-DIAG (live trace — see note above).
-  console.log("[journalRepo] REPO_DB_WRITE_START");
-  try {
-    const created = await database.transaction("rw", database.journalEntries, database.journalLines, async () => {
-      const nowStr = now();
-      const entryId = await database.journalEntries.add({
-        ...entry,
-        createdAt: nowStr,
-        updatedAt: nowStr,
-      });
-
-      const createdLines = lines.map((line) => ({
-        ...line,
-        entryId,
-        createdAt: nowStr,
-      }));
-      await database.journalLines.bulkAdd(createdLines as any);
-
-      return { ...entry, id: entryId, createdAt: nowStr, updatedAt: nowStr, lines: createdLines as JournalLine[] };
+  return await database.transaction("rw", database.journalEntries, database.journalLines, async () => {
+    const nowStr = now();
+    const entryId = await database.journalEntries.add({
+      ...entry,
+      createdAt: nowStr,
+      updatedAt: nowStr,
     });
-    console.log("[journalRepo] REPO_DB_WRITE_SUCCESS");
-    return created;
-  } catch (error) {
-    console.log(
-      "[journalRepo] REPO_DB_WRITE_FAILED",
-      JSON.stringify({
-        name: error instanceof Error ? error.name : typeof error,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      }),
-    );
-    throw error;
-  }
+
+    const createdLines = lines.map((line) => ({
+      ...line,
+      entryId,
+      createdAt: nowStr,
+    }));
+    await database.journalLines.bulkAdd(createdLines as any);
+
+    return { ...entry, id: entryId, createdAt: nowStr, updatedAt: nowStr, lines: createdLines as JournalLine[] };
+  });
 }
 
 export async function updateJournalEntry(
@@ -154,44 +131,22 @@ export async function updateJournalEntry(
   if (!existingEntry) throw new Error("Entry not found");
 
   const mergedEntry = { ...existingEntry, ...entry, updatedAt: now() };
-  // TEMP-DIAG (live trace for silent-submit reports — remove once the root
-  // cause is confirmed from a real console trace).
-  console.log("[journalRepo] REPO_ENTRY updateJournalEntry", JSON.stringify({ id, entry, lines }));
   const validation = validateEntry(mergedEntry, lines as JournalLine[]);
   if (!validation.ok) {
-    console.log(
-      "[journalRepo] REPO_VALIDATION_FAILED",
-      JSON.stringify(validation.errors.map((e) => e.message)),
-    );
     throw new Error(validation.errors.map((e) => e.message).join("; "));
   }
 
-  console.log("[journalRepo] REPO_DB_WRITE_START");
-  try {
-    const updated = await database.transaction("rw", database.journalEntries, database.journalLines, async () => {
-      await database.journalEntries.update(id, { ...entry, updatedAt: now() });
-      await database.journalLines.where("entryId").equals(id).delete();
-      const createdLines = lines.map((line) => ({
-        ...line,
-        entryId: id,
-        createdAt: now(),
-      }));
-      await database.journalLines.bulkAdd(createdLines as any);
-      return { ...mergedEntry, lines: createdLines as JournalLine[] };
-    });
-    console.log("[journalRepo] REPO_DB_WRITE_SUCCESS");
-    return updated;
-  } catch (error) {
-    console.log(
-      "[journalRepo] REPO_DB_WRITE_FAILED",
-      JSON.stringify({
-        name: error instanceof Error ? error.name : typeof error,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      }),
-    );
-    throw error;
-  }
+  return await database.transaction("rw", database.journalEntries, database.journalLines, async () => {
+    await database.journalEntries.update(id, { ...entry, updatedAt: now() });
+    await database.journalLines.where("entryId").equals(id).delete();
+    const createdLines = lines.map((line) => ({
+      ...line,
+      entryId: id,
+      createdAt: now(),
+    }));
+    await database.journalLines.bulkAdd(createdLines as any);
+    return { ...mergedEntry, lines: createdLines as JournalLine[] };
+  });
 }
 
 export async function postJournalEntry(

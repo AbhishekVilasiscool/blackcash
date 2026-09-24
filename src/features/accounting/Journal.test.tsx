@@ -253,6 +253,64 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     unmount();
   });
 
+  test("balanced 2-line entry without memo: disabled with an unmistakable reason, then memo enables and persists", async () => {
+    const { cashId, salesId } = await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+    // Account options arrive via useLiveQuery — wait before selecting.
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Line 1 account") as HTMLSelectElement).options.length,
+      ).toBeGreaterThan(1);
+    });
+
+    // Two valid lines, equal totals, accounts selected — but NO memo.
+    // (Deliberately not touching the memo field.)
+    // Second line must exist first.
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    const line1 = {
+      account: screen.getByLabelText("Line 1 account") as HTMLSelectElement,
+      debit: screen.getByLabelText("Line 1 debit") as HTMLInputElement,
+    };
+    const line2 = {
+      account: screen.getByLabelText("Line 2 account") as HTMLSelectElement,
+      credit: screen.getByLabelText("Line 2 credit") as HTMLInputElement,
+    };
+    fireEvent.change(line1.account, { target: { value: cashId } });
+    fireEvent.change(line1.debit, { target: { value: "11" } });
+    fireEvent.change(line2.account, { target: { value: salesId } });
+    fireEvent.change(line2.credit, { target: { value: "11" } });
+
+    // The exact reported live state: green badge, disabled button.
+    expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(submitButton().disabled).toBe(true);
+
+    // …with the missing memo named loudly, not as muted decoration.
+    const hint = screen.getByRole("status");
+    expect(hint).toHaveTextContent(/add a memo/i);
+    expect(hint.className).toContain("text-accent");
+    expect(hint.className).toContain("font-semibold");
+    expect(hint.className).not.toContain("text-muted");
+
+    // Fill the memo → button enables → click persists the entry.
+    fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
+      target: { value: "Memo completes it" },
+    });
+    expect(submitButton().disabled).toBe(false);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    fireEvent.click(submitButton());
+
+    await screen.findByText("Memo completes it", undefined, { timeout: 10000 });
+    const entries = await db.journalEntries.toArray();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].memo).toBe("Memo completes it");
+
+    unmount();
+  },
+  30000,
+  );
+
   test("primary submit button is always rendered (never invisible), only enabled/disabled", async () => {
     await seedTwoAccounts();
     const { unmount } = render(<Journal />);
