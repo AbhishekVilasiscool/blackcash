@@ -59,6 +59,20 @@ export function Journal() {
   const [showReversalInfo, setShowReversalInfo] = useState<{ originalId: number; reversalId: number } | null>(null);
   const [refresh, setRefresh] = useState(0);
 
+  // Permanent on-page save diagnostics: a thin status strip at the bottom of
+  // the form mirrors the REAL state transitions of the save below
+  // (idle → saving → saved/failed). Never decorative — the failed state
+  // shows error.name + the FULL error.message so a broken save is provable
+  // on-screen without DevTools.
+  type SavePhase = "idle" | "saving" | "saved" | "failed";
+  interface SaveStatus {
+    phase: SavePhase;
+    entryId?: number;
+    errorName?: string;
+    errorMessage?: string;
+  }
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ phase: "idle" });
+
   // Permanent bound for any save that could hang without settling.
   const SAVE_TIMEOUT_MS = 8000;
 
@@ -178,10 +192,12 @@ export function Journal() {
     });
     setErrors([]);
     setSubmitAttempted(false);
+    setSaveStatus({ phase: "idle" });
     setEditingEntry(null);
   }
 
   function handleOpenDrawer(entry?: JournalEntryWithLines) {
+    setSaveStatus({ phase: "idle" });
     if (entry) {
       setEditingEntry(entry);
       setFormData({
@@ -206,6 +222,9 @@ export function Journal() {
     setEditingEntry(null);
     setErrors([]);
     setSubmitAttempted(false);
+    // NOTE: saveStatus intentionally NOT reset here — the terminal
+    // saved/failed state stays inspectable in the (hidden but mounted)
+    // drawer until the next open.
   }
 
   function updateLine(index: number, field: keyof LineFormData, value: string) {
@@ -261,6 +280,7 @@ export function Journal() {
       memo,
     }));
 
+    setSaveStatus({ phase: "saving" });
     try {
       const save = editingEntry
         ? updateJournalEntry(db, editingEntry.id!, entryData, submitLines)
@@ -278,14 +298,21 @@ export function Journal() {
           );
         }, SAVE_TIMEOUT_MS);
       });
-      await Promise.race([save, timeout]);
+      const saved = await Promise.race([save, timeout]);
+      setSaveStatus({ phase: "saved", entryId: saved.id });
       setRefresh((v) => v + 1);
       handleCloseDrawer();
     } catch (err) {
       // Permanent, quiet: full error for diagnostics; message for the user.
-      // The submit path can never fail silently — every rejection lands here.
+      // The submit path can never fail silently — every rejection lands here
+      // and is mirrored on-screen in both the error box and the status strip.
       console.error("[journal] Save failed:", err);
       setErrors([err instanceof Error ? err.message : "Failed to save entry"]);
+      setSaveStatus({
+        phase: "failed",
+        errorName: err instanceof Error ? err.name : typeof err,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -682,6 +709,33 @@ export function Journal() {
                 {submitHint}
               </p>
             )}
+            <div
+              data-testid="save-status"
+              aria-live="polite"
+              className={`rounded-lg border px-3 py-1.5 font-mono text-[11px] ${
+                saveStatus.phase === "failed"
+                  ? "border-danger/40 bg-danger/10 text-danger"
+                  : saveStatus.phase === "saved"
+                    ? "border-green-500/40 bg-green-500/10 text-green-400"
+                    : saveStatus.phase === "saving"
+                      ? "border-accent/40 bg-accent/10 text-accent"
+                      : "border-border bg-white/5 text-muted"
+              }`}
+            >
+              {saveStatus.phase === "idle" && <span>Ready</span>}
+              {saveStatus.phase === "saving" && <span className="animate-pulse">Saving…</span>}
+              {saveStatus.phase === "saved" && (
+                <span>
+                  Saved successfully
+                  {saveStatus.entryId !== undefined ? ` (entry #${saveStatus.entryId})` : ""}
+                </span>
+              )}
+              {saveStatus.phase === "failed" && (
+                <span className="break-words">
+                  Failed: {saveStatus.errorName}: {saveStatus.errorMessage}
+                </span>
+              )}
+            </div>
           </form>
         </div>
       </div>

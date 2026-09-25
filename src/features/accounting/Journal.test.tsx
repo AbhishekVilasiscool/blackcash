@@ -151,6 +151,10 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     await screen.findByText("Valid entry", undefined, { timeout: 10000 });
     const entries = await db.journalEntries.toArray();
     expect(entries).toHaveLength(1);
+    // The permanent status strip mirrors the real transition, entry id included.
+    expect(screen.getByTestId("save-status")).toHaveTextContent(
+      new RegExp(`Saved successfully \\(entry #${entries[0].id}\\)`),
+    );
     const lines = await db.journalLines.where("entryId").equals(entries[0].id!).toArray();
     expect(lines).toHaveLength(2);
     expect(lines.map((l) => [l.debit, l.credit]).sort()).toEqual([

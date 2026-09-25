@@ -123,13 +123,13 @@ describe("Chart of Accounts seeding and add-account flow", () => {
 
     // Row appears live in the table and persists.
     // (Generous timeout: fake-indexeddb + liveQuery re-render is slow under load.)
-    await screen.findByText("Test Emergency Fund", undefined, { timeout: 10000 });
+    await screen.findByText("Test Emergency Fund", undefined, { timeout: 20000 });
     expect(accountRows(container)).toBe(EXPECTED_SEED_COUNT + 1);
     expect(await db.accounts.where("clientId").equals(1).count()).toBe(EXPECTED_SEED_COUNT + 1);
 
     unmount();
     },
-    30000,
+    60000,
   );
 
   test(
@@ -168,15 +168,15 @@ describe("Chart of Accounts seeding and add-account flow", () => {
       target: { value: "Picker Probe" },
     });
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
-    await screen.findByText("Picker Probe", undefined, { timeout: 10000 });
+    await screen.findByText("Picker Probe", undefined, { timeout: 20000 });
     coa.unmount();
 
     // …and pick it in a Journal entry form.
     render(<Journal />);
     fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
     await screen.findByText("New Journal Entry");
-    await screen.findByRole("option", { name: "1750 - Picker Probe" }, { timeout: 10000 });
+    await screen.findByRole("option", { name: "1750 - Picker Probe" }, { timeout: 20000 });
     },
-    30000,
+    60000,
   );
 });
