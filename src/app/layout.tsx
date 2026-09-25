@@ -161,12 +161,25 @@ export function Layout() {
         </nav>
 
         <div className="mt-auto p-3 border-t border-border">
-          <p className="text-xs leading-relaxed text-muted">local-first · open source</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs leading-relaxed text-muted">local-first · open source</p>
+            {/* Vault status must be visible at every viewport width: the
+                mobile header (which also shows it) unmounts at lg, so the
+                desktop sidebar carries its own indicator. */}
+            <VaultIndicator />
+          </div>
         </div>
       </aside>
 
-      {/* Mobile header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-[var(--bg-2)]/80 px-4 py-3 backdrop-blur lg:hidden">
+      {/* Mobile header. Sticky within the page scroll container; the
+          safe-area top padding keeps it below notches / system UI in
+          fullscreen (env() is 0px where there is no safe area, so this is a
+          no-op on plain desktop browsers). */}
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-[var(--bg-2)]/80 px-4 py-3 backdrop-blur lg:hidden"
+        // Preserve py-3's 0.75rem top padding AND clear the safe area.
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
+      >
         <span className="flex items-center gap-2 text-base font-display font-semibold tracking-tight">
           <ModeSwitcherSheet />
         </span>
