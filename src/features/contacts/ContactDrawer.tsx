@@ -116,17 +116,20 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
             role="dialog"
             aria-modal="true"
             aria-label={contact ? "Edit contact" : "New contact"}
-            className="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-y-auto rounded-t-xl border-t border-border bg-[#0B1120] p-4 pb-10 lg:inset-y-0 lg:inset-x-auto lg:right-0 lg:w-[440px] lg:max-h-none lg:rounded-none lg:border-l lg:border-t-0 lg:rounded-l-2xl"
+            className="absolute inset-x-0 bottom-0 flex max-h-[90vh] max-h-[90dvh] flex-col overflow-hidden rounded-t-xl border-t border-border bg-[#0B1120] p-4 pb-10 lg:inset-y-0 lg:inset-x-auto lg:right-0 lg:w-[440px] lg:max-h-none lg:rounded-none lg:border-l lg:border-t-0 lg:rounded-l-2xl"
             initial={reduceMotion ? { opacity: 0 } : { y: 64 }}
             animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { y: 64 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
           >
-            <h3 className="mb-4 px-1 text-base font-semibold">
+            <h3 className="mb-4 shrink-0 px-1 text-base font-semibold">
               {contact ? "Edit contact" : "New contact"}
             </h3>
 
-            <div className="flex flex-col gap-4">
+            <div
+              data-testid="contact-fields-scroll"
+              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto [scrollbar-gutter:stable]"
+            >
               <Input
                 label="Name"
                 value={form.name}
@@ -184,8 +187,13 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
               />
 
               {error !== null && <p className="text-sm text-danger">{error}</p>}
+            </div>
 
-              <div className="mt-2 flex gap-2">
+            <div
+              data-testid="drawer-footer"
+              className="mt-4 shrink-0 border-t border-border pt-4"
+            >
+              <div className="flex gap-2">
                 <Button type="button" onClick={handleSubmit} disabled={saving}>
                   {saving ? "Saving…" : contact ? "Save changes" : "Add contact"}
                 </Button>

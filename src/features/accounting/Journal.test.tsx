@@ -315,6 +315,27 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
   30000,
   );
 
+  test("drawer layout contract: memo and submit footer stay out of the scrolling lines region", async () => {
+    await seedTwoAccounts();
+    const { unmount } = render(<Journal />);
+    fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
+    await screen.findByText("New Journal Entry");
+
+    const scrollRegion = screen.getByTestId("lines-scroll");
+    const footer = screen.getByTestId("drawer-footer");
+    // The middle region owns the only overflow: reaching it never needs zoom.
+    expect(scrollRegion.className).toContain("overflow-y-auto");
+    // Critical controls live outside the scroll region…
+    const memo = screen.getByPlaceholderText("Description of the transaction");
+    expect(scrollRegion.contains(memo)).toBe(false);
+    expect(footer.contains(submitButton())).toBe(true);
+    expect(scrollRegion.contains(footer)).toBe(false);
+    // …while the variable-length table lives inside it.
+    expect(scrollRegion.contains(screen.getByLabelText("Line 1 debit"))).toBe(true);
+
+    unmount();
+  });
+
   test("primary submit button is always rendered (never invisible), only enabled/disabled", async () => {
     await seedTwoAccounts();
     const { unmount } = render(<Journal />);

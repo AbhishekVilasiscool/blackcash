@@ -488,10 +488,10 @@ export function Journal() {
       >
         <div className="absolute inset-0 bg-black/50" onClick={handleCloseDrawer} />
         <div
-          className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[var(--bg-2)] border border-border rounded-t-xl p-6 shadow-xl animate-slide-up"
+          className="relative flex w-full max-w-4xl max-h-[90vh] max-h-[90dvh] flex-col overflow-hidden bg-[var(--bg-2)] border border-border rounded-t-xl p-6 shadow-xl animate-slide-up"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex shrink-0 items-center justify-between mb-6">
             <h2 className="font-display text-lg font-semibold">
               {editingEntry ? "Edit Journal Entry" : "New Journal Entry"}
             </h2>
@@ -503,7 +503,7 @@ export function Journal() {
           {(visibleLiveErrors.length > 0 || errors.length > 0) && (
             <div
               role="alert"
-              className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
+              className="mb-4 shrink-0 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
             >
               <ul className="list-disc pl-4 space-y-1">
                 {[...visibleLiveErrors, ...errors].map((err, i) => <li key={i}>{err}</li>)}
@@ -511,8 +511,12 @@ export function Journal() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* The form is a flex column: pinned Date/Memo/Reference on top,
+              a scrolling Lines region in the middle, and a pinned action
+              footer at the bottom — so the memo field and the submit button
+              are reachable at 100% zoom without scrolling the whole panel. */}
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-4">
+            <div className="grid shrink-0 grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-caps text-muted mb-1">Date</label>
                 <input
@@ -542,7 +546,7 @@ export function Journal() {
               </div>
             </div>
 
-            <div className="border-t border-border pt-4">
+            <div className="shrink-0 border-t border-border pt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-caps text-sm tracking-wider text-muted">Lines</h3>
                 <Button
@@ -554,9 +558,28 @@ export function Journal() {
                   <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Line
                 </Button>
               </div>
+            </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            {formData.lines.length < 2 && (
+              <div className="shrink-0 rounded-xl border border-accent/50 bg-accent/10 p-3">
+                <p className="text-sm font-medium text-text">
+                  Add at least one more line to balance this entry.
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  Double-entry needs both sides — use the highlighted{" "}
+                  <span className="font-semibold text-accent">Add Line</span> button above,
+                  then pick an account and an amount for each line.
+                </p>
+              </div>
+            )}
+
+            {/* Only this region scrolls: it gets its own visible scrollbar
+                gutter so reaching it never requires zooming out. */}
+            <div
+              data-testid="lines-scroll"
+              className="min-h-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]"
+            >
+              <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-white/5">
                       <th className="text-left p-2 font-caps text-[10px] tracking-wider text-muted w-48">Account</th>
@@ -661,21 +684,14 @@ export function Journal() {
                   </tfoot>
                 </table>
               </div>
-              {formData.lines.length < 2 && (
-                <div className="mt-3 rounded-xl border border-accent/50 bg-accent/10 p-3">
-                  <p className="text-sm font-medium text-text">
-                    Add at least one more line to balance this entry.
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    Double-entry needs both sides — use the highlighted{" "}
-                    <span className="font-semibold text-accent">Add Line</span> button above,
-                    then pick an account and an amount for each line.
-                  </p>
-                </div>
-              )}
-            </div>
 
-            <div className="flex gap-3 pt-4 border-t border-border">
+            {/* Pinned footer: actions, hint, and save strip stay visible at
+                100% zoom no matter how many lines the scrolling region holds. */}
+            <div
+              data-testid="drawer-footer"
+              className="shrink-0 space-y-3 border-t border-border pt-4"
+            >
+              <div className="flex gap-3">
               <Button variant="ghost" onClick={handleCloseDrawer} className="flex-1">
                 Cancel
               </Button>
@@ -735,6 +751,7 @@ export function Journal() {
                   Failed: {saveStatus.errorName}: {saveStatus.errorMessage}
                 </span>
               )}
+              </div>
             </div>
           </form>
         </div>

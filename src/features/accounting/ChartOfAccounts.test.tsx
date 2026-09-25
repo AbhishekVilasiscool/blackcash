@@ -160,6 +160,27 @@ describe("Chart of Accounts seeding and add-account flow", () => {
   );
 
   test(
+    "drawer layout contract: submit footer is pinned outside the scrolling fields region",
+    async () => {
+      await db.seedChartOfAccounts(1);
+      const { unmount } = render(<ChartOfAccounts />);
+      await screen.findByText("Cash on Hand");
+
+      await openAddAccountForm();
+      const scrollRegion = screen.getByTestId("account-fields-scroll");
+      const footer = screen.getByTestId("drawer-footer");
+      expect(scrollRegion.className).toContain("overflow-y-auto");
+      expect(
+        footer.contains(screen.getByRole("button", { name: /create account/i })),
+      ).toBe(true);
+      expect(scrollRegion.contains(footer)).toBe(false);
+
+      unmount();
+    },
+    30000,
+  );
+
+  test(
     "duplicate account codes are rejected with a visible error and persist nothing",
     async () => {
     await db.seedChartOfAccounts(1);

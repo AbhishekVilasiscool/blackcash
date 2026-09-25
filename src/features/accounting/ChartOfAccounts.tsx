@@ -315,10 +315,10 @@ return (
         >
           <div className="absolute inset-0 bg-black/50" onClick={() => setIsDrawerOpen(false)} />
           <div
-            className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-[var(--bg-2)] border border-border rounded-t-xl p-6 shadow-xl animate-slide-up"
+            className="relative flex w-full max-w-md max-h-[90vh] max-h-[90dvh] flex-col overflow-hidden bg-[var(--bg-2)] border border-border rounded-t-xl p-6 shadow-xl animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex shrink-0 items-center justify-between mb-6">
               <h2 className="font-display text-lg font-semibold">
                 {editingAccount ? "Edit Account" : "New Account"}
               </h2>
@@ -333,15 +333,20 @@ return (
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Flex column: fields scroll if needed, actions stay pinned. */}
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-4">
               {submitError && (
                 <div
                   role="alert"
-                  className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
+                  className="shrink-0 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
                 >
                   {submitError}
                 </div>
               )}
+              <div
+                data-testid="account-fields-scroll"
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto [scrollbar-gutter:stable]"
+              >
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-caps text-muted mb-1">Code</label>
@@ -455,14 +460,20 @@ return (
                   Active
                 </label>
               </div>
+              </div>
 
-              <div className="flex gap-3 pt-4 border-t border-border">
+              <div
+                data-testid="drawer-footer"
+                className="shrink-0 border-t border-border pt-4"
+              >
+              <div className="flex gap-3">
                 <Button variant="ghost" onClick={() => setIsDrawerOpen(false)} className="flex-1">
                   Cancel
                 </Button>
                 <Button type="submit" className="flex-1">
                   {editingAccount ? "Save Changes" : "Create Account"}
                 </Button>
+              </div>
               </div>
             </form>
           </div>
