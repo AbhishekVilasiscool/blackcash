@@ -52,7 +52,9 @@ export function Journal() {
     date: new Date().toISOString().split("T")[0],
     memo: "",
     reference: "",
-    lines: [emptyLine()],
+    // Guided default: exactly two lines (FROM/credit + TO/debit) so a
+    // first-time user never faces a bare one-row table.
+    lines: [emptyLine(), emptyLine()],
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -188,7 +190,7 @@ export function Journal() {
       date: new Date().toISOString().split("T")[0],
       memo: "",
       reference: "",
-      lines: [emptyLine()],
+      lines: [emptyLine(), emptyLine()],
     });
     setErrors([]);
     setSubmitAttempted(false);
@@ -200,16 +202,20 @@ export function Journal() {
     setSaveStatus({ phase: "idle" });
     if (entry) {
       setEditingEntry(entry);
+      const mapped = entry.lines.map((line) => ({
+        accountId: String(line.accountId),
+        debit: line.debit > 0 ? String(line.debit) : "",
+        credit: line.credit > 0 ? String(line.credit) : "",
+        memo: line.memo,
+      }));
+      // Preserve the guided two-block minimum even when editing a legacy
+      // entry that somehow holds a single line.
+      while (mapped.length < 2) mapped.push(emptyLine());
       setFormData({
         date: entry.date,
         memo: entry.memo,
         reference: entry.reference,
-        lines: entry.lines.map((line) => ({
-          accountId: String(line.accountId),
-          debit: line.debit > 0 ? String(line.debit) : "",
-          credit: line.credit > 0 ? String(line.credit) : "",
-          memo: line.memo,
-        })),
+        lines: mapped,
       });
     } else {
       resetForm();
@@ -253,6 +259,74 @@ export function Journal() {
     const newLines = formData.lines.filter((_, i) => i !== index);
     setFormData({ ...formData, lines: newLines });
   }
+
+  // Guided two-block presentation over the identical LineFormData model.
+  // Each card shows ONE amount input; the card's side decides whether the
+  // amount is stored as a debit or a credit. Defaults: first block (FROM)
+  // is money-out/credit, every other block (TO / splits) is money-in/debit.
+  type LineSide = "debit" | "credit";
+  function lineSide(line: LineFormData, index: number): LineSide {
+    if (line.credit.trim() !== "" && Number(line.credit) !== 0) return "credit";
+    if (line.debit.trim() !== "" && Number(line.debit) !== 0) return "debit";
+    return index === 0 ? "credit" : "debit";
+  }
+  function lineAmount(line: LineFormData, index: number): string {
+    return lineSide(line, index) === "credit" ? line.credit : line.debit;
+  }
+  function updateAmount(index: number, value: string) {
+    updateLine(index, lineSide(formData.lines[index], index), value);
+  }
+  function updateSide(index: number, side: LineSide) {
+    const line = formData.lines[index];
+    if (lineSide(line, index) === side) return;
+    // Carry the typed amount across sides so switching direction never
+    // silently zeroes the value (empty stays empty).
+    const current = lineAmount(line, index);
+    const next = [...formData.lines];
+    next[index] = {
+      ...line,
+      debit: side === "debit" ? current : "",
+      credit: side === "credit" ? current : "",
+    };
+    setFormData({ ...formData, lines: next });
+    setErrors([]);
+  }
+
+  // Grouped account picker data (Assets, Liabilities, Equity, Revenue,
+  // Expense) — presentation only, same account rows as before.
+  const ACCOUNT_GROUPS: { type: string; label: string }[] = [
+    { type: "asset", label: "Assets" },
+    { type: "liability", label: "Liabilities" },
+    { type: "equity", label: "Equity" },
+    { type: "revenue", label: "Revenue" },
+    { type: "expense", label: "Expenses" },
+  ];
+  const groupedAccounts = useMemo(
+    () =>
+      ACCOUNT_GROUPS.map((group) => ({
+        ...group,
+        accounts: accounts
+          .filter((a) => a.type === group.type)
+          .slice()
+          .sort((a, b) => a.code.localeCompare(b.code)),
+      })).filter((g) => g.accounts.length > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [accounts],
+  );
+  const ungroupedAccounts = useMemo(
+    () =>
+      accounts.filter((a) => !ACCOUNT_GROUPS.some((g) => g.type === a.type)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [accounts],
+  );
+
+  const balanceDifference = useMemo(
+    () => totals.totalDebit - totals.totalCredit,
+    [totals],
+  );
+  const absDifference = Math.abs(balanceDifference);
+  const fmtMoney = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -515,48 +589,50 @@ export function Journal() {
               a scrolling Lines region in the middle, and a pinned action
               footer at the bottom — so the memo field and the submit button
               are reachable at 100% zoom without scrolling the whole panel. */}
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-4">
-            <div className="grid shrink-0 grid-cols-1 sm:grid-cols-3 gap-4">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-6">
+            {/* About this entry: deliberately separated from the money
+                movement below, with larger labels and roomier inputs. */}
+            <div className="shrink-0 rounded-2xl border border-border bg-white/[0.03] p-5 sm:p-6">
+              <h3 className="font-caps text-sm tracking-wider text-muted mb-4">About this entry</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
-                <label className="block text-xs font-caps text-muted mb-1">Date</label>
+                <label className="block text-sm font-semibold text-text mb-2">Date</label>
                 <input
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-2 focus:outline-accent"
+                  className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
                   required
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-caps text-muted mb-1">Memo</label>
+                <label className="block text-sm font-semibold text-text mb-2">Memo <span className="font-normal text-muted">— what was this for?</span></label>
                 <Input
                   value={formData.memo}
                   onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
                   placeholder="Description of the transaction"
+                  className="[&_input]:min-h-[52px] [&_input]:px-4 [&_input]:py-3.5 [&_input]:text-base"
                   required
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-caps text-muted mb-1">Reference</label>
+                <label className="block text-sm font-semibold text-text mb-2">Reference <span className="font-normal text-muted">— optional</span></label>
                 <Input
                   value={formData.reference}
                   onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
                   placeholder="Optional reference number"
+                  className="[&_input]:min-h-[52px] [&_input]:px-4 [&_input]:py-3.5 [&_input]:text-base"
                 />
+              </div>
               </div>
             </div>
 
-            <div className="shrink-0 border-t border-border pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-caps text-sm tracking-wider text-muted">Lines</h3>
-                <Button
-                  variant="ghost"
-                  className={`px-3 py-1.5 text-sm ${formData.lines.length < 2 ? "ring-2 ring-accent/60" : ""}`}
-                  onClick={addLine}
-                  disabled={formData.lines.length >= 20}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Line
-                </Button>
+            <div className="shrink-0 border-t border-border pt-5">
+              <div className="mb-1">
+                <h3 className="font-caps text-sm tracking-wider text-muted">Money movement</h3>
+                <p className="mt-1 text-sm text-muted">
+                  Tell it like it happened: where did the money leave, and where did it go?
+                </p>
               </div>
             </div>
 
@@ -566,9 +642,9 @@ export function Journal() {
                   Add at least one more line to balance this entry.
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  Double-entry needs both sides — use the highlighted{" "}
-                  <span className="font-semibold text-accent">Add Line</span> button above,
-                  then pick an account and an amount for each line.
+                  Double-entry needs both sides — use the{" "}
+                  <span className="font-semibold text-accent">Add another line</span> button below,
+                  then pick an account and an amount for each block.
                 </p>
               </div>
             )}
@@ -579,110 +655,219 @@ export function Journal() {
               data-testid="lines-scroll"
               className="min-h-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]"
             >
-              <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-white/5">
-                      <th className="text-left p-2 font-caps text-[10px] tracking-wider text-muted w-48">Account</th>
-                      <th className="text-right p-2 font-caps text-[10px] tracking-wider text-muted w-32">Debit</th>
-                      <th className="text-right p-2 font-caps text-[10px] tracking-wider text-muted w-32">Credit</th>
-                      <th className="text-left p-2 font-caps text-[10px] tracking-wider text-muted flex-1">Memo</th>
-                      <th className="text-center p-2 font-caps text-[10px] tracking-wider text-muted w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {formData.lines.map((line, index) => (
-                      <tr key={index} className="border-b border-border/50">
-                        <td className="p-2">
-                          <select
-                            value={line.accountId}
-                            onChange={(e) => updateLine(index, "accountId", e.target.value)}
-                            aria-label={`Line ${index + 1} account`}
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-2 focus:outline-accent"
+              <div className="space-y-5">
+                {formData.lines.map((line, index) => {
+                  const side = lineSide(line, index);
+                  const isFrom = index === 0;
+                  const isSplit = index >= 2;
+                  const heading = isFrom
+                    ? "From — where the money leaves"
+                    : index === 1
+                      ? "To — where the money goes"
+                      : `Split line ${index + 1}`;
+                  const subheading = isFrom
+                    ? "Money out · recorded as a credit"
+                    : index === 1
+                      ? "Money in · recorded as a debit"
+                      : "Extra split · pick which side it belongs on";
+                  return (
+                    <section
+                      key={index}
+                      aria-label={`Line ${index + 1}: ${heading}`}
+                      className="rounded-2xl border border-border bg-white/[0.03] p-5 sm:p-6 space-y-5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            aria-hidden="true"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 font-display text-base font-semibold text-accent"
                           >
-                            <option value="">Select account</option>
-                            {accounts.map((acc) => (
-                              <option key={acc.id} value={String(acc.id)}>
-                                {acc.code} - {acc.name}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={line.debit}
-                            onChange={(e) => updateLine(index, "debit", e.target.value)}
-                            disabled={line.credit.trim() !== "" && Number(line.credit) !== 0}
-                            aria-label={`Line ${index + 1} debit`}
-                            title={
-                              line.credit.trim() !== "" && Number(line.credit) !== 0
-                                ? "This line already has a credit — clear Credit to enter a debit."
-                                : "Debit amount for this line"
-                            }
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
-                            placeholder={
-                              line.credit.trim() !== "" && Number(line.credit) !== 0
-                                ? "already credited"
-                                : "0.00"
-                            }
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={line.credit}
-                            onChange={(e) => updateLine(index, "credit", e.target.value)}
-                            disabled={line.debit.trim() !== "" && Number(line.debit) !== 0}
-                            aria-label={`Line ${index + 1} credit`}
-                            title={
-                              line.debit.trim() !== "" && Number(line.debit) !== 0
-                                ? "This line already has a debit — clear Debit to enter a credit."
-                                : "Credit amount for this line"
-                            }
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text text-right font-mono focus:outline-2 focus:outline-accent disabled:opacity-40"
-                            placeholder={
-                              line.debit.trim() !== "" && Number(line.debit) !== 0
-                                ? "already debited"
-                                : "0.00"
-                            }
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={line.memo}
-                            onChange={(e) => updateLine(index, "memo", e.target.value)}
-                            aria-label={`Line ${index + 1} memo`}
-                            className="w-full rounded-xl border border-border bg-surface px-2 py-1.5 text-sm text-text focus:outline-2 focus:outline-accent"
-                            placeholder="Line memo"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <Button variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => removeLine(index)} disabled={formData.lines.length <= 2} aria-label="Remove line">
-                            <X className="h-3.5 w-3.5 text-danger" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-white/5 font-bold">
-                      <td className="p-2 text-right font-caps text-[10px] tracking-wider">Totals</td>
-                      <td className="p-2 text-right font-mono tabular-nums text-text">{totals.totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="p-2 text-right font-mono tabular-nums text-text">{totals.totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="p-2">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium ${linesValid ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
-                          {linesValid ? "Balanced" : "Unbalanced"}
-                        </span>
-                      </td>
-                      <td className="p-2"></td>
-                    </tr>
-                  </tfoot>
-                </table>
+                            {index + 1}
+                          </span>
+                          <div>
+                            <h4 className="font-display text-lg font-semibold leading-snug text-text">
+                              {heading}
+                            </h4>
+                            <p className="text-sm text-muted">{subheading}</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          className="px-3 py-2 text-sm shrink-0"
+                          onClick={() => removeLine(index)}
+                          disabled={formData.lines.length <= 2}
+                          aria-label={`Remove line ${index + 1}`}
+                          title={formData.lines.length <= 2 ? "An entry always needs at least two lines." : `Remove line ${index + 1}`}
+                        >
+                          <X className="h-4 w-4 text-danger" />
+                        </Button>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`journal-line-${index}-account`}
+                          className="block text-sm font-semibold text-text mb-2"
+                        >
+                          Account
+                        </label>
+                        <select
+                          id={`journal-line-${index}-account`}
+                          value={line.accountId}
+                          onChange={(e) => updateLine(index, "accountId", e.target.value)}
+                          aria-label={`Line ${index + 1} account`}
+                          className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
+                        >
+                          <option value="">Select account</option>
+                          {groupedAccounts.map((group) => (
+                            <optgroup key={group.type} label={group.label}>
+                              {group.accounts.map((acc) => (
+                                <option key={acc.id} value={String(acc.id)}>
+                                  {acc.code} - {acc.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                          {ungroupedAccounts.map((acc) => (
+                            <option key={acc.id} value={String(acc.id)}>
+                              {acc.code} - {acc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label
+                            htmlFor={`journal-line-${index}-amount`}
+                            className="block text-sm font-semibold text-text mb-2"
+                          >
+                            Amount
+                          </label>
+                          <div className="relative">
+                            <span aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-mono text-base text-muted">$</span>
+                            <input
+                              id={`journal-line-${index}-amount`}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={lineAmount(line, index)}
+                              onChange={(e) => updateAmount(index, e.target.value)}
+                              aria-label={`Line ${index + 1} amount`}
+                              title={side === "credit" ? "Amount leaving on this line (credit)" : "Amount arriving on this line (debit)"}
+                              className="w-full min-h-[52px] rounded-xl border border-border bg-surface pl-8 pr-4 py-3.5 text-base text-text text-right font-mono focus:outline-2 focus:outline-accent"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <span id={`journal-line-${index}-side-label`} className="block text-sm font-semibold text-text mb-2">
+                            Direction
+                          </span>
+                          <div role="group" aria-labelledby={`journal-line-${index}-side-label`} className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateSide(index, "credit")}
+                              aria-pressed={side === "credit"}
+                              aria-label={`Line ${index + 1}: money out (credit)`}
+                              title="Money out — recorded as a credit"
+                              className={`min-h-[52px] rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${side === "credit" ? "border-accent bg-accent/15 text-accent" : "border-border text-muted hover:text-text"}`}
+                            >
+                              Money out
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateSide(index, "debit")}
+                              aria-pressed={side === "debit"}
+                              aria-label={`Line ${index + 1}: money in (debit)`}
+                              title="Money in — recorded as a debit"
+                              className={`min-h-[52px] rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${side === "debit" ? "border-accent bg-accent/15 text-accent" : "border-border text-muted hover:text-text"}`}
+                            >
+                              Money in
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`journal-line-${index}-memo`}
+                          className="block text-sm font-semibold text-text mb-2"
+                        >
+                          Line note <span className="font-normal text-muted">— optional</span>
+                        </label>
+                        <input
+                          id={`journal-line-${index}-memo`}
+                          type="text"
+                          value={line.memo}
+                          onChange={(e) => updateLine(index, "memo", e.target.value)}
+                          aria-label={`Line ${index + 1} memo`}
+                          className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
+                          placeholder="Optional note for this line"
+                        />
+                      </div>
+                      {isSplit && (
+                        <p className="text-xs text-muted">
+                          Split lines let one payment cover several categories — the totals below must still agree.
+                        </p>
+                      )}
+                    </section>
+                  );
+                })}
+
+                {/* Prominent running balance: unmissable large type, always
+                    visible without hunting for a footer badge. */}
+                <div
+                  data-testid="balance-summary"
+                  role="status"
+                  aria-live="polite"
+                  className={`rounded-2xl border p-5 sm:p-6 ${linesValid ? "border-green-500/40 bg-green-500/10" : "border-accent/40 bg-accent/10"}`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+                    <p className={`font-display text-2xl font-semibold ${linesValid ? "text-green-400" : "text-text"}`}>
+                      {linesValid
+                        ? `Difference: $0.00 — Balanced`
+                        : `Difference: $${fmtMoney(absDifference)} — Unbalanced`}
+                    </p>
+                    <span className={`inline-flex w-fit items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold ${linesValid ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"}`}>
+                      {linesValid ? "Balanced" : "Unbalanced"}
+                    </span>
+                  </div>
+                  {!linesValid && absDifference > 0 && (
+                    <p className="mt-2 text-base font-medium text-text">
+                      You are ${fmtMoney(absDifference)} short of balance — adjust an amount so both sides agree.
+                    </p>
+                  )}
+                  {!linesValid && absDifference === 0 && (
+                    <p className="mt-2 text-base font-medium text-text">
+                      Amounts agree — pick an account for every block to finish balancing.
+                    </p>
+                  )}
+                  <dl className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="rounded-xl bg-black/25 px-4 py-3">
+                      <dt className="text-xs font-caps text-muted">Money in (debits)</dt>
+                      <dd className="mt-1 font-mono tabular-nums text-lg text-text">{fmtMoney(totals.totalDebit)}</dd>
+                    </div>
+                    <div className="rounded-xl bg-black/25 px-4 py-3">
+                      <dt className="text-xs font-caps text-muted">Money out (credits)</dt>
+                      <dd className="mt-1 font-mono tabular-nums text-lg text-text">{fmtMoney(totals.totalCredit)}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Secondary action for splits — deliberately quiet next to
+                    the two guided blocks above. */}
+                <div className="pb-1 text-center">
+                  <Button
+                    variant="ghost"
+                    className={`w-full sm:w-auto px-4 py-2.5 text-sm border-dashed ${formData.lines.length < 2 ? "ring-2 ring-accent/60" : ""}`}
+                    onClick={addLine}
+                    disabled={formData.lines.length >= 20}
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Add another line
+                  </Button>
+                  <p className="mt-2 text-xs text-muted">Only needed for splits — most entries use just the two blocks above.</p>
+                </div>
+              </div>
               </div>
 
             {/* Pinned footer: actions, hint, and save strip stay visible at

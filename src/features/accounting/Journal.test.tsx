@@ -14,11 +14,15 @@ async function seedTwoAccounts() {
   return { cashId: String(cash.id), salesId: String(sales.id) };
 }
 
+// Guided two-block layout: each line card exposes one account picker, one
+// amount input, and a money-in/money-out direction toggle. Line 1 (FROM)
+// defaults to money-out (credit); line 2 (TO) defaults to money-in (debit).
 function lineInputs(lineNumber: number) {
   return {
     account: screen.getByLabelText(`Line ${lineNumber} account`) as HTMLSelectElement,
-    debit: screen.getByLabelText(`Line ${lineNumber} debit`) as HTMLInputElement,
-    credit: screen.getByLabelText(`Line ${lineNumber} credit`) as HTMLInputElement,
+    amount: screen.getByLabelText(`Line ${lineNumber} amount`) as HTMLInputElement,
+    moneyIn: screen.getByLabelText(`Line ${lineNumber}: money in (debit)`) as HTMLButtonElement,
+    moneyOut: screen.getByLabelText(`Line ${lineNumber}: money out (credit)`) as HTMLButtonElement,
   };
 }
 
@@ -30,6 +34,8 @@ async function openNewEntryForm() {
     const select = screen.getByLabelText("Line 1 account") as HTMLSelectElement;
     expect(select.options.length).toBeGreaterThan(1);
   });
+  // Guided default: both blocks render up front.
+  await screen.findByLabelText("Line 2 account");
 }
 
 function submitButton(): HTMLButtonElement {
@@ -47,25 +53,26 @@ afterEach(async () => {
 });
 
 describe("Journal entry form validation (UI must match ledger rules)", () => {
-  test("debit and credit are mutually exclusive per line: filling one clears the other", async () => {
+  test("direction toggle carries the typed amount across sides without zeroing it", async () => {
     const { cashId } = await seedTwoAccounts();
     const { unmount } = render(<Journal />);
     await openNewEntryForm();
 
     const line1 = lineInputs(1);
+    expect(line1.moneyOut.getAttribute("aria-pressed")).toBe("true");
     fireEvent.change(line1.account, { target: { value: cashId } });
-    fireEvent.change(line1.debit, { target: { value: "100" } });
+    fireEvent.change(line1.amount, { target: { value: "100" } });
 
-    // Entering a debit clears and disables credit for that line.
-    expect(line1.debit.value).toBe("100");
-    expect(line1.credit.value).toBe("");
-    expect(line1.credit.disabled).toBe(true);
+    // Switching direction keeps the value and flips the pressed side.
+    expect(line1.amount.value).toBe("100");
+    fireEvent.click(line1.moneyIn);
+    expect(line1.moneyIn.getAttribute("aria-pressed")).toBe("true");
+    expect(line1.moneyOut.getAttribute("aria-pressed")).toBe("false");
+    expect(line1.amount.value).toBe("100");
 
-    // Entering a credit clears the debit side instead.
-    fireEvent.change(line1.credit, { target: { value: "50" } });
-    expect(line1.credit.value).toBe("50");
-    expect(line1.debit.value).toBe("");
-    expect(line1.debit.disabled).toBe(true);
+    // Switching back carries it again.
+    fireEvent.click(line1.moneyOut);
+    expect(line1.amount.value).toBe("100");
 
     unmount();
   });
@@ -75,7 +82,7 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     const { unmount } = render(<Journal />);
     await openNewEntryForm();
 
-    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    // Two guided blocks render by default — no "Add line" click needed.
     fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
       target: { value: "Screenshot repro" },
     });
@@ -83,14 +90,19 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     // Two lines, equal totals (1,222.00 / 1,222.00), no account on either line.
     const line1 = lineInputs(1);
     const line2 = lineInputs(2);
-    fireEvent.change(line1.debit, { target: { value: "1222" } });
-    fireEvent.change(line2.credit, { target: { value: "1222" } });
+    fireEvent.change(line1.amount, { target: { value: "1222" } });
+    fireEvent.change(line2.amount, { target: { value: "1222" } });
 
     // Totals still display the raw sums…
     expect(screen.getAllByText("1,222.00")).toHaveLength(2);
     // …but the badge must refuse "Balanced" and the button must stay disabled.
     expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
     expect(screen.getByText("Unbalanced")).toBeInTheDocument();
+    // …and the prominent summary shows a $0.00 difference (amounts agree)
+    // yet still Unbalanced, naming the real blocker: missing accounts.
+    const summary = screen.getByTestId("balance-summary");
+    expect(summary).toHaveTextContent(/Difference: \$0\.00/);
+    expect(summary).toHaveTextContent(/pick an account/i);
     expect(submitButton().disabled).toBe(true);
     // …with visible per-line errors in the alert box (the status hint may
     // echo the first one — scope to the alert to assert the error list).
@@ -121,19 +133,20 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     const { unmount } = render(<Journal />);
     await openNewEntryForm();
 
-    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
     fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
       target: { value: "Valid entry" },
     });
 
+    // FROM block defaults to money-out (credit), TO block to money-in (debit).
     const line1 = lineInputs(1);
     const line2 = lineInputs(2);
-    fireEvent.change(line1.account, { target: { value: cashId } });
-    fireEvent.change(line1.debit, { target: { value: "100" } });
-    fireEvent.change(line2.account, { target: { value: salesId } });
-    fireEvent.change(line2.credit, { target: { value: "100" } });
+    fireEvent.change(line1.account, { target: { value: salesId } });
+    fireEvent.change(line1.amount, { target: { value: "100" } });
+    fireEvent.change(line2.account, { target: { value: cashId } });
+    fireEvent.change(line2.amount, { target: { value: "100" } });
 
     expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(screen.getByTestId("balance-summary")).toHaveTextContent(/Difference: \$0\.00/);
     expect(submitButton().disabled).toBe(false);
 
     fireEvent.click(submitButton());
@@ -177,7 +190,7 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
 
     // Disabled — but with a named next step, not silence…
     expect(submitButton().disabled).toBe(true);
-    expect(screen.getByRole("status")).toHaveTextContent(/add a memo/i);
+    expect(screen.getByText(/add a memo/i)).toBeInTheDocument();
     // …and without shouting ledger errors at an untouched form.
     expect(screen.queryByText("Line 1: Select an account")).not.toBeInTheDocument();
     expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
@@ -185,72 +198,73 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     unmount();
   });
 
-  test("single-line entry names the 2-line requirement in the hint", async () => {
+  test("guided default opens with FROM and TO blocks and a secondary split action", async () => {
     const { cashId } = await seedTwoAccounts();
     const { unmount } = render(<Journal />);
     fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
     await screen.findByText("New Journal Entry");
+    await screen.findByLabelText("Line 2 account");
 
-    fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
-      target: { value: "One liner" },
+    // Plain-language guided blocks, not raw debit/credit rows…
+    expect(screen.getByText("From — where the money leaves")).toBeInTheDocument();
+    expect(screen.getByText("To — where the money goes")).toBeInTheDocument();
+    // …grouped account pickers (real optgroups, not a flat list)…
+    // (Account options arrive via useLiveQuery — wait before asserting.)
+    await waitFor(() => {
+      const select = screen.getByLabelText("Line 1 account") as HTMLSelectElement;
+      expect(select.options.length).toBeGreaterThan(1);
     });
-    const line1 = {
-      account: screen.getByLabelText("Line 1 account") as HTMLSelectElement,
-      debit: screen.getByLabelText("Line 1 debit") as HTMLInputElement,
-    };
+    const picker = screen.getByLabelText("Line 1 account") as HTMLSelectElement;
+    expect(picker.querySelector('optgroup[label="Assets"]')).not.toBeNull();
+    expect(picker.querySelector('optgroup[label="Expenses"]')).not.toBeNull();
+    // …and the split action is present but quiet (no urgent highlight).
+    const addLine = screen.getByRole("button", { name: /add another line/i });
+    expect(addLine.className).not.toContain("ring-accent/60");
+
+    // One filled block alone is still not submittable.
+    fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
+      target: { value: "One block filled" },
+    });
+    const line1 = lineInputs(1);
     fireEvent.change(line1.account, { target: { value: cashId } });
-    fireEvent.change(line1.debit, { target: { value: "100" } });
-
-    // One complete line is still not submittable — and the UI says why.
+    fireEvent.change(line1.amount, { target: { value: "100" } });
     expect(submitButton().disabled).toBe(true);
-    expect(screen.getByRole("status")).toHaveTextContent(/at least 2 lines/i);
 
     unmount();
   });
 
-  test("disabled side explains itself in the field: placeholder names the reason", async () => {
+  test("amount field keeps a plain 0.00 placeholder and the toggle explains each direction", async () => {
     await seedTwoAccounts();
     const { unmount } = render(<Journal />);
     fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
     await screen.findByText("New Journal Entry");
 
-    const debit = screen.getByLabelText("Line 1 debit") as HTMLInputElement;
-    const credit = screen.getByLabelText("Line 1 credit") as HTMLInputElement;
-    expect(debit.getAttribute("placeholder")).toBe("0.00");
-    expect(credit.getAttribute("placeholder")).toBe("0.00");
+    const line1 = lineInputs(1);
+    expect(line1.amount.getAttribute("placeholder")).toBe("0.00");
+    expect(line1.moneyIn.getAttribute("title")).toMatch(/money in/i);
+    expect(line1.moneyOut.getAttribute("title")).toMatch(/money out/i);
 
-    fireEvent.change(debit, { target: { value: "250" } });
-    expect(credit.disabled).toBe(true);
-    expect(credit.getAttribute("placeholder")).toBe("already debited");
-    expect(credit.getAttribute("title")).toMatch(/already has a debit/i);
-
-    // Clearing the debit restores the credit field to normal.
-    fireEvent.change(debit, { target: { value: "" } });
-    expect(credit.disabled).toBe(false);
-    expect(credit.getAttribute("placeholder")).toBe("0.00");
+    // Typing an amount then flipping direction keeps the value on the card.
+    fireEvent.change(line1.amount, { target: { value: "250" } });
+    fireEvent.click(line1.moneyIn);
+    expect(line1.amount.value).toBe("250");
+    expect(line1.amount.getAttribute("placeholder")).toBe("0.00");
 
     unmount();
   });
 
-  test("single line gets an unmissable callout plus a highlighted Add Line button", async () => {
+  test("two-block default shows no single-line callout and no highlighted add action", async () => {
     await seedTwoAccounts();
     const { unmount } = render(<Journal />);
     fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
     await screen.findByText("New Journal Entry");
+    await screen.findByLabelText("Line 2 account");
 
-    // One line: callout visible, Add Line ringed.
-    expect(
-      screen.getByText("Add at least one more line to balance this entry."),
-    ).toBeInTheDocument();
-    const addLine = screen.getByRole("button", { name: /add line/i });
-    expect(addLine.className).toContain("ring-accent/60");
-
-    // Two lines: callout gone, highlight gone.
-    fireEvent.click(addLine);
+    // Two blocks by default: no "add one more line" callout, no urgency ring.
     expect(
       screen.queryByText("Add at least one more line to balance this entry."),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add line/i }).className).not.toContain(
+    expect(screen.getByRole("button", { name: /add another line/i }).className).not.toContain(
       "ring-accent/60",
     );
 
@@ -269,30 +283,21 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
       ).toBeGreaterThan(1);
     });
 
-    // Two valid lines, equal totals, accounts selected — but NO memo.
+    // Two valid blocks, equal totals, accounts selected — but NO memo.
     // (Deliberately not touching the memo field.)
-    // Second line must exist first.
-    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
-    const line1 = {
-      account: screen.getByLabelText("Line 1 account") as HTMLSelectElement,
-      debit: screen.getByLabelText("Line 1 debit") as HTMLInputElement,
-    };
-    const line2 = {
-      account: screen.getByLabelText("Line 2 account") as HTMLSelectElement,
-      credit: screen.getByLabelText("Line 2 credit") as HTMLInputElement,
-    };
-    fireEvent.change(line1.account, { target: { value: cashId } });
-    fireEvent.change(line1.debit, { target: { value: "11" } });
-    fireEvent.change(line2.account, { target: { value: salesId } });
-    fireEvent.change(line2.credit, { target: { value: "11" } });
+    const line1 = lineInputs(1);
+    const line2 = lineInputs(2);
+    fireEvent.change(line1.account, { target: { value: salesId } });
+    fireEvent.change(line1.amount, { target: { value: "11" } });
+    fireEvent.change(line2.account, { target: { value: cashId } });
+    fireEvent.change(line2.amount, { target: { value: "11" } });
 
     // The exact reported live state: green badge, disabled button.
     expect(screen.getByText("Balanced")).toBeInTheDocument();
     expect(submitButton().disabled).toBe(true);
 
     // …with the missing memo named loudly, not as muted decoration.
-    const hint = screen.getByRole("status");
-    expect(hint).toHaveTextContent(/add a memo/i);
+    const hint = screen.getByText(/add a memo/i);
     expect(hint.className).toContain("text-accent");
     expect(hint.className).toContain("font-semibold");
     expect(hint.className).not.toContain("text-muted");
@@ -302,7 +307,7 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
       target: { value: "Memo completes it" },
     });
     expect(submitButton().disabled).toBe(false);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/add a memo/i)).not.toBeInTheDocument();
     fireEvent.click(submitButton());
 
     await screen.findByText("Memo completes it", undefined, { timeout: 10000 });
@@ -330,8 +335,9 @@ describe("Journal entry form validation (UI must match ledger rules)", () => {
     expect(scrollRegion.contains(memo)).toBe(false);
     expect(footer.contains(submitButton())).toBe(true);
     expect(scrollRegion.contains(footer)).toBe(false);
-    // …while the variable-length table lives inside it.
-    expect(scrollRegion.contains(screen.getByLabelText("Line 1 debit"))).toBe(true);
+    // …while the variable-length line cards live inside it.
+    expect(scrollRegion.contains(screen.getByLabelText("Line 1 amount"))).toBe(true);
+    expect(scrollRegion.contains(screen.getByTestId("balance-summary"))).toBe(true);
 
     unmount();
   });

@@ -49,7 +49,7 @@ describe("Journal save status strip (forced repo failure)", () => {
       // Idle strip reads Ready before anything happens.
       expect(screen.getByTestId("save-status")).toHaveTextContent("Ready");
 
-      fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+      // Guided default already renders both blocks — no "Add line" click.
       fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
         target: { value: "Doomed entry" },
       });
@@ -57,9 +57,9 @@ describe("Journal save status strip (forced repo failure)", () => {
       const cashId = String(accounts.find((a) => a.code === "1000")!.id!);
       const salesId = String(accounts.find((a) => a.code === "4000")!.id!);
       fireEvent.change(screen.getByLabelText("Line 1 account"), { target: { value: cashId } });
-      fireEvent.change(screen.getByLabelText("Line 1 debit"), { target: { value: "50" } });
+      fireEvent.change(screen.getByLabelText("Line 1 amount"), { target: { value: "50" } });
       fireEvent.change(screen.getByLabelText("Line 2 account"), { target: { value: salesId } });
-      fireEvent.change(screen.getByLabelText("Line 2 credit"), { target: { value: "50" } });
+      fireEvent.change(screen.getByLabelText("Line 2 amount"), { target: { value: "50" } });
 
       fireEvent.click(screen.getByRole("button", { name: /create entry/i }));
 

@@ -88,22 +88,28 @@ describe("Journal production-tree regression: valid submit persists", () => {
         fireEvent.click(newEntryButton);
         await screen.findByText("New Journal Entry", undefined, { timeout: 15000 });
 
-        // 3. Startup seeding populated the picker through the production path.
-        await screen.findByRole("option", { name: /1000 - Cash on Hand/ }, { timeout: 15000 });
+        // 3. Startup seeding populated the pickers through the production
+        // path (both guided blocks share the same account list).
+        const cashOptions = await screen.findAllByRole(
+          "option",
+          { name: /1000 - Cash on Hand/ },
+          { timeout: 15000 },
+        );
+        expect(cashOptions.length).toBeGreaterThanOrEqual(2);
 
-        // 4. Fill a genuinely valid entry: 2 lines, accounts selected,
-        // debits == credits, memo, date.
-        fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+        // 4. Fill a genuinely valid entry: 2 guided blocks, accounts
+        // selected, debits == credits, memo, date. FROM defaults to
+        // money-out (credit), TO to money-in (debit).
         fireEvent.change(screen.getByPlaceholderText("Description of the transaction"), {
           target: { value: "Production-tree fee income" },
         });
         const dbAccounts = await db.accounts.where("clientId").equals(1).toArray();
         const cashId = String(dbAccounts.find((a) => a.code === "1000")!.id!);
         const salesId = String(dbAccounts.find((a) => a.code === "4000")!.id!);
-        fireEvent.change(screen.getByLabelText("Line 1 account"), { target: { value: cashId } });
-        fireEvent.change(screen.getByLabelText("Line 1 debit"), { target: { value: "100" } });
-        fireEvent.change(screen.getByLabelText("Line 2 account"), { target: { value: salesId } });
-        fireEvent.change(screen.getByLabelText("Line 2 credit"), { target: { value: "100" } });
+        fireEvent.change(screen.getByLabelText("Line 1 account"), { target: { value: salesId } });
+        fireEvent.change(screen.getByLabelText("Line 1 amount"), { target: { value: "100" } });
+        fireEvent.change(screen.getByLabelText("Line 2 account"), { target: { value: cashId } });
+        fireEvent.change(screen.getByLabelText("Line 2 amount"), { target: { value: "100" } });
 
         expect(screen.getByText("Balanced")).toBeInTheDocument();
         const submit = screen.getByRole("button", { name: /create entry/i }) as HTMLButtonElement;

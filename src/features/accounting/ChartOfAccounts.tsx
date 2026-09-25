@@ -334,31 +334,32 @@ return (
             </div>
 
             {/* Flex column: fields scroll if needed, actions stay pinned. */}
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-4">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col space-y-6">
               {submitError && (
                 <div
                   role="alert"
-                  className="shrink-0 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm"
+                  className="shrink-0 p-4 rounded-xl bg-danger/10 border border-danger/30 text-danger text-sm"
                 >
                   {submitError}
                 </div>
               )}
               <div
                 data-testid="account-fields-scroll"
-                className="min-h-0 flex-1 space-y-4 overflow-y-auto [scrollbar-gutter:stable]"
+                className="min-h-0 flex-1 space-y-6 overflow-y-auto [scrollbar-gutter:stable]"
               >
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-caps text-muted mb-1">Code</label>
+                  <label className="block text-sm font-semibold text-text mb-2">Code</label>
                   <Input
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     placeholder="1000"
+                    className="[&_input]:min-h-[52px] [&_input]:px-4 [&_input]:py-3.5 [&_input]:text-base"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-caps text-muted mb-1">Type</label>
+                  <label className="block text-sm font-semibold text-text mb-2">Type</label>
                   <select
                     value={formData.type}
                     onChange={(e) => {
@@ -369,7 +370,7 @@ return (
                         newType === "revenue" ? "sales" : "cost_of_goods_sold";
                       setFormData({ ...formData, type: newType, subtype: defaultSubtype as AccountSubtype });
                     }}
-                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-2 focus:outline-accent"
+                    className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
                     required
                   >
                     <option value="asset">Asset</option>
@@ -381,13 +382,13 @@ return (
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-xs font-caps text-muted mb-1">Subtype</label>
+                  <label className="block text-sm font-semibold text-text mb-2">Subtype</label>
                   <select
                     value={formData.subtype}
                     onChange={(e) => setFormData({ ...formData, subtype: e.target.value as AccountSubtype })}
-                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-2 focus:outline-accent"
+                    className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
                     required
                   >
                     {(() => {
@@ -419,11 +420,11 @@ return (
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-caps text-muted mb-1">Parent Account (Optional)</label>
+                  <label className="block text-sm font-semibold text-text mb-2">Parent Account (Optional)</label>
                   <select
                     value={formData.parentId}
                     onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
-                    className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:outline-2 focus:outline-accent"
+                    className="w-full min-h-[52px] rounded-xl border border-border bg-surface px-4 py-3.5 text-base text-text focus:outline-2 focus:outline-accent"
                   >
                     <option value="">None</option>
                     {(() => {
@@ -439,24 +440,25 @@ return (
               </div>
 
               <div>
-                <label className="block text-xs font-caps text-muted mb-1">Name</label>
+                <label className="block text-sm font-semibold text-text mb-2">Name</label>
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Account Name"
+                  className="[&_input]:min-h-[52px] [&_input]:px-4 [&_input]:py-3.5 [&_input]:text-base"
                   required
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 min-h-[44px]">
                 <input
                   type="checkbox"
                   id="isActive"
                   checked={formData.isActive}
                   onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="rounded border-border"
+                  className="h-5 w-5 rounded border-border"
                 />
-                <label htmlFor="isActive" className="text-sm text-text">
+                <label htmlFor="isActive" className="text-base text-text">
                   Active
                 </label>
               </div>

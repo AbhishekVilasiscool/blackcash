@@ -122,13 +122,13 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
             exit={reduceMotion ? { opacity: 0 } : { y: 64 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
           >
-            <h3 className="mb-4 shrink-0 px-1 text-base font-semibold">
+            <h3 className="mb-5 shrink-0 px-1 font-display text-xl font-semibold">
               {contact ? "Edit contact" : "New contact"}
             </h3>
 
             <div
               data-testid="contact-fields-scroll"
-              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto [scrollbar-gutter:stable]"
+              className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-1 [scrollbar-gutter:stable]"
             >
               <Input
                 label="Name"
@@ -137,15 +137,15 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
                 autoFocus
               />
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">Type</span>
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2.5">
+                <span className="text-sm font-semibold text-text">Type</span>
+                <div className="flex flex-wrap gap-2.5">
                   {CONTACT_TYPES.map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => setValue("type", type)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                      className={`min-h-[44px] rounded-full border px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
                         form.type === type
                           ? "border-accent bg-accent/10 text-accent"
                           : "border-border text-muted hover:text-text"
@@ -193,7 +193,7 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
               data-testid="drawer-footer"
               className="mt-4 shrink-0 border-t border-border pt-4"
             >
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Button type="button" onClick={handleSubmit} disabled={saving}>
                   {saving ? "Saving…" : contact ? "Save changes" : "Add contact"}
                 </Button>

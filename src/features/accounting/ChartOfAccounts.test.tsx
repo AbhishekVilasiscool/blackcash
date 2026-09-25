@@ -219,11 +219,17 @@ describe("Chart of Accounts seeding and add-account flow", () => {
     await screen.findByText("Picker Probe", undefined, { timeout: 20000 });
     coa.unmount();
 
-    // …and pick it in a Journal entry form.
+    // …and pick it in a Journal entry form (both guided blocks share
+    // the same account list, so expect one option per block).
     render(<Journal />);
     fireEvent.click(screen.getByRole("button", { name: /new entry/i }));
     await screen.findByText("New Journal Entry");
-    await screen.findByRole("option", { name: "1750 - Picker Probe" }, { timeout: 20000 });
+    const probeOptions = await screen.findAllByRole(
+      "option",
+      { name: "1750 - Picker Probe" },
+      { timeout: 20000 },
+    );
+    expect(probeOptions.length).toBeGreaterThanOrEqual(2);
     },
     60000,
   );
