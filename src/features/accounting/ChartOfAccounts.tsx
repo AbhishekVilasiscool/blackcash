@@ -75,6 +75,11 @@ export function ChartOfAccounts() {
   });
   const [showInactive, setShowInactive] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Permanent click diagnostic: proves on-screen (no DevTools needed)
+  // whether the Add Account click reaches its handler at all. If the counter
+  // increments but no drawer appears, the drawer render is at fault; if the
+  // counter never moves, the click itself is swallowed before the handler.
+  const [drawerOpenCount, setDrawerOpenCount] = useState(0);
 
   const accounts = useLiveQuery(
     () => db.accounts.where("clientId").equals(clientId).toArray(),
@@ -100,6 +105,7 @@ export function ChartOfAccounts() {
   })).filter((g) => g.accounts.length > 0);
 
   const handleOpenDrawer = (account?: Account) => {
+    setDrawerOpenCount((count) => count + 1);
     if (account) {
       setEditingAccount(account);
       setFormData({
@@ -217,6 +223,9 @@ return (
             <Button onClick={() => handleOpenDrawer()} className="ml-2">
               <Plus className="h-4 w-4 mr-2" /> Add Account
             </Button>
+            <span className="text-xs text-muted" data-testid="drawer-open-count">
+              Drawer opens: {drawerOpenCount}
+            </span>
           </div>
         </div>
 

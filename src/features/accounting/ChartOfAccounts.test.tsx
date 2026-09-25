@@ -133,6 +133,33 @@ describe("Chart of Accounts seeding and add-account flow", () => {
   );
 
   test(
+    "drawer-open counter proves the Add Account click reaches its handler",
+    async () => {
+      await db.seedChartOfAccounts(1);
+      const { unmount } = render(<ChartOfAccounts />);
+      await screen.findByText("Cash on Hand");
+
+      // Counter starts at zero and is visible next to the button.
+      expect(screen.getByTestId("drawer-open-count")).toHaveTextContent("Drawer opens: 0");
+
+      fireEvent.click(screen.getByRole("button", { name: /add account/i }));
+      await screen.findByText("New Account");
+      expect(screen.getByTestId("drawer-open-count")).toHaveTextContent("Drawer opens: 1");
+
+      // Cancel (drawer hides but stays mounted) and reopen: the counter keeps
+      // counting handler invocations.
+      fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /add account/i }));
+      await waitFor(() => {
+        expect(screen.getByTestId("drawer-open-count")).toHaveTextContent("Drawer opens: 2");
+      });
+
+      unmount();
+    },
+    30000,
+  );
+
+  test(
     "duplicate account codes are rejected with a visible error and persist nothing",
     async () => {
     await db.seedChartOfAccounts(1);
