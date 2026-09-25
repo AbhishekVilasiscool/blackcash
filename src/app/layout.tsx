@@ -160,14 +160,17 @@ export function Layout() {
           ))}
         </nav>
 
-        <div className="mt-auto p-3 border-t border-border">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs leading-relaxed text-muted">local-first · open source</p>
-            {/* Vault status must be visible at every viewport width: the
-                mobile header (which also shows it) unmounts at lg, so the
-                desktop sidebar carries its own indicator. */}
-            <VaultIndicator />
-          </div>
+        {/* Stacked vertically (not side-by-side): at 216px of usable
+            sidebar width the tagline and the indicator compete and the
+            tagline breaks mid-word at its hyphen. Column layout gives each
+            full width at ANY sidebar width, so future footer additions
+            cannot reintroduce the competition. */}
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-border p-3">
+          <p className="whitespace-nowrap text-xs leading-relaxed text-muted">local-first · open source</p>
+          {/* Vault status must be visible at every viewport width: the
+              mobile header (which also shows it) unmounts at lg, so the
+              desktop sidebar carries its own indicator. */}
+          <VaultIndicator />
         </div>
       </aside>
 

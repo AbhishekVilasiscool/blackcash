@@ -107,4 +107,20 @@ describe("Layout header/sidebar visibility across viewport sizes", () => {
 
     unmount();
   });
+
+  test("sidebar footer stacks tagline and vault indicator vertically (never side-by-side)", () => {
+    const { unmount } = renderLayout();
+
+    // Regression guard for mid-word wrapping ("local-"/"first"): the two
+    // footer children must share a vertical-stack container, and the tagline
+    // itself must never wrap — jsdom has no layout engine, so the test pins
+    // the structure that makes horizontal competition impossible.
+    const tagline = screen.getByText("local-first · open source");
+    const stack = tagline.parentElement;
+    if (!stack) throw new Error("sidebar footer stack not found");
+    expect(stack.className).toContain("flex-col");
+    expect(tagline.className).toContain("whitespace-nowrap");
+
+    unmount();
+  });
 });
