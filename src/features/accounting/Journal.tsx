@@ -7,6 +7,7 @@ import { validateEntry } from "../../lib/finance/ledger";
 import { Card } from "../../components/ornament/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { Portal } from "../../components/ui/Portal";
 import { Section } from "../../components/ornament/Section";
 import { WaxSeal } from "../../components/ornament/WaxSeal";
 import { useClientId } from "../../hooks/useClientId";
@@ -556,7 +557,13 @@ export function Journal() {
         )}
       </Section>
 
+      {/* Body-level portal: the route wrapper in app/layout.tsx carries a
+          permanent perspective transform, which would otherwise hijack the
+          containing block of this fixed overlay and push the panel
+          off-screen. See components/ui/Portal. */}
+      <Portal>
       <div
+        data-testid="journal-drawer"
         className={`fixed inset-0 z-50 flex items-end justify-center ${isDrawerOpen ? "block" : "hidden"}`}
         onClick={handleCloseDrawer}
       >
@@ -941,9 +948,11 @@ export function Journal() {
           </form>
         </div>
       </div>
+      </Portal>
 
       {showReversalInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowReversalInfo(null)}>
+        <Portal>
+        <div data-testid="reversal-dialog" className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowReversalInfo(null)}>
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowReversalInfo(null)} />
           <div className="relative w-full max-w-md bg-[var(--bg-2)] border border-border rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display text-lg font-semibold mb-4">Entry Voided</h3>
@@ -957,6 +966,7 @@ export function Journal() {
             </Button>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

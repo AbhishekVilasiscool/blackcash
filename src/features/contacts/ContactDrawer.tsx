@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { Portal } from "../../components/ui/Portal";
 import { db } from "../../lib/db";
 import { createContact, updateContact } from "../../lib/repos/contactsRepo";
 import {
@@ -100,9 +101,10 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
   }
 
   return (
+    <Portal>
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50" data-testid="contact-drawer">
           <motion.button
             type="button"
             aria-label="Close"
@@ -206,5 +208,6 @@ export function ContactDrawer({ open, contact, onClose, onSaved }: ContactDrawer
         </div>
       )}
     </AnimatePresence>
+    </Portal>
   );
 }

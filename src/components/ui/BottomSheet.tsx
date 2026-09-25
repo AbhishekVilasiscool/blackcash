@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
+import { Portal } from "./Portal";
 
 export interface BottomSheetProps {
   open: boolean;
@@ -15,6 +16,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
   const reduceMotion = useReducedMotion();
 
   return (
+    <Portal>
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -46,6 +48,7 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         </div>
       )}
     </AnimatePresence>
+    </Portal>
   );
 }
 
@@ -71,6 +74,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
   const reduceMotion = useReducedMotion();
 
   return (
+    <Portal>
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -115,5 +119,6 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
         </div>
       )}
     </AnimatePresence>
+    </Portal>
   );
 }

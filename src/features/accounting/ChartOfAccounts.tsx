@@ -6,6 +6,7 @@ import { type Account, type AccountType, type AccountSubtype } from "../../lib/d
 import { Card } from "../../components/ornament/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { Portal } from "../../components/ui/Portal";
 import { Section } from "../../components/ornament/Section";
 import { useClientId } from "../../hooks/useClientId";
 
@@ -309,7 +310,11 @@ return (
           </div>
         )}
 
+        {/* Body-level portal: same fixed-in-transformed-route hazard as the
+            Journal drawer (see components/ui/Portal). */}
+        <Portal>
         <div
+          data-testid="account-drawer"
           className={`fixed inset-0 z-50 flex items-end justify-center ${isDrawerOpen ? "block" : "hidden"}`}
           onClick={() => setIsDrawerOpen(false)}
         >
@@ -480,6 +485,7 @@ return (
             </form>
           </div>
         </div>
+        </Portal>
       </div>
     </Section>
   );
